@@ -183,12 +183,24 @@ struct StringWrap
             ::gem5::curTick(), name(), data, count, #x); \
 } while (0)
 
-#define DPRINTF(x, ...) do {                     \
-    if (GEM5_UNLIKELY(TRACING_ON && (::gem5::debug::x))) {   \
-        ::gem5::Trace::getDebugLogger()->dprintf_flag(   \
-            ::gem5::curTick(), name(), #x, __VA_ARGS__); \
-    }                                            \
-} while (0)
+#if DEBUG_SHOW_CYCLES
+    #define DPRINTF(x, ...) do {                     \
+        if (GEM5_UNLIKELY(TRACING_ON && (::gem5::debug::x))) {   \
+            ::gem5::Trace::getDebugLogger()->dprintf_flag(   \
+                ::gem5::curTick(), name(), #x, \
+                "[c: %llu] %s", \
+                ::gem5::curTick()/333, \
+                ::gem5::csprintf(__VA_ARGS__).c_str()); \
+        }  /* todo: remove 333, use cpu->clockPeriod() */ \
+    } while (0)
+#else
+    #define DPRINTF(x, ...) do {                     \
+        if (GEM5_UNLIKELY(TRACING_ON && (::gem5::debug::x))) {   \
+            ::gem5::Trace::getDebugLogger()->dprintf_flag(   \
+                ::gem5::curTick(), name(), #x, __VA_ARGS__); \
+        }                                            \
+    } while (0)
+#endif
 
 #define DPRINTFS(x, s, ...) do {                        \
     if (GEM5_UNLIKELY(TRACING_ON && (::gem5::debug::x))) {          \

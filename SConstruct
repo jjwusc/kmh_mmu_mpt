@@ -149,6 +149,8 @@ AddOption('--pgo-prof', action='store_true',
           help='Enable pgo profiling generation')
 AddOption('--pgo-use', action='store', default=None,
           help='Use pgo profiling results')
+AddOption('--debug-cycle', action='store_true',
+          help='Enable print cycle in DPRINTF')
 
 # Inject the built_tools directory into the python path.
 sys.path[1:1] = [ Dir('#build_tools').abspath ]
