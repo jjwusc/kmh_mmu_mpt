@@ -27,7 +27,6 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 #ifndef __ARCH_RISCV_PAGETABLE_H__
 #define __ARCH_RISCV_PAGETABLE_H__
 
@@ -36,11 +35,56 @@
 #include "base/trie.hh"
 #include "base/types.hh"
 #include "sim/serialize.hh"
+#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"  //JJW
 
 namespace gem5
 {
 
 namespace RiscvISA {
+	
+
+
+
+// JJW: 
+//存入 TLB 的 MPT 相关信息（权限 + 粒度）
+struct MPTInfoInTLB
+{
+    uint32_t valid         : 1;   // 是否有效
+    uint32_t perm_r        : 1;
+    uint32_t perm_w        : 1;
+    uint32_t perm_x        : 1;
+    uint32_t mptLogBytes   : 6;   // MPT 粒度，log2(region size)//6位最多为63. 2^63 ≈ 8EB  2^31  = 2GB. 6位足够
+    uint32_t reserved      : 22;  // 保留位，总共32位
+
+    // 默认构造（无效）
+    MPTInfoInTLB()
+        : valid(0), perm_r(0), perm_w(0), perm_x(0),
+          mptLogBytes(0), reserved(0) {}
+
+	// 判断 MPT 信息是否可信 // 信任判断：mpt粒度是否 ≥ TLB 粒度
+    bool mptinfoTrust(uint8_t tlbLogBytes) const {
+        return this->valid && (this->mptLogBytes >= tlbLogBytes);
+    }
+
+
+    // 静态函数，直接从一个 entry 构造出 info
+	//调用方法：MPTInfoInTLB info = MPTInfoInTLB::fromEntry(entry, offset);
+    static MPTInfoInTLB fromEntry(const MPTCacheEntry &entry, Addr rangeOffset) {
+        uint8_t pi = (rangeOffset >> getPageShiftForLevel(entry.level)) & 0xF;
+        uint8_t perm = entry.mpte.perms(pi);
+
+        MPTInfoInTLB info;
+        info.valid = entry.valid;
+        info.perm_r = (perm & MPT_PERM_R) != 0;
+        info.perm_w = (perm & MPT_PERM_W) != 0;
+        info.perm_x = (perm & MPT_PERM_X) != 0;
+        info.mptLogBytes = entry.log2RegionSize;
+        return info;
+    }
+};
+
+
+
 
 BitUnion64(SATP)
     Bitfield<63, 60> mode;
@@ -210,6 +254,9 @@ struct TlbEntry : public Serializable
     bool fromBackPreReq;
     bool preSign;
 
+	// New: 
+    MPTInfoInTLB mptInfo;// JJW
+
     TlbEntry()
         : paddr(0),
           vaddr(0),
@@ -229,7 +276,8 @@ struct TlbEntry : public Serializable
           isPre(false),
           fromForwardPreReq(false),
           fromBackPreReq(false),
-          preSign(false)
+          preSign(false),
+		  mptInfo() //JJW
     {
     }
 
@@ -247,3 +295,5 @@ struct TlbEntry : public Serializable
 } // namespace gem5
 
 #endif // __ARCH_RISCV_PAGETABLE_H__
+
+

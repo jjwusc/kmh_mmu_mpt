@@ -110,6 +110,17 @@ class TLB : public BaseTLB
     PrivilegeMode old_priv_ex;
 
     Walker *walker;
+	
+	//JJW:
+	#if MPT_ENABLED
+	extern MPT globalMPT;//mpt的rootPPN在C++中作为POD类型的struct会自动默认初始化为0而不是乱码，但这显然不是想访问的MPT表起始地址
+	//在tlb。cc中的多级tlb、所有tlb对象都属于TLB类，每个TLB实例不会创建一份 MPT ,使用的是全局变量。globalMPT/mptcache是在mmu_mpt_and_mptcache-Smmpt52.cc中创建的。
+	//相应地，在tlb.cc中定义的TLB类构造函数中，也不包括mpt mptcache的初始化。
+	  #if MPT_CACHE_ENABLED
+	  extern MPTCache52 globalMPTCache;
+	  #endif
+
+	#endif
 
     struct TlbStats : public statistics::Group
     {
@@ -202,6 +213,28 @@ class TLB : public BaseTLB
                       BaseMMU::Mode mode, PTESv39 pte);
     std::pair<bool, Fault> checkGPermissions(STATUS status, Addr vaddr, Addr gpaddr, BaseMMU::Mode mode, PTESv39 pte,
                                              bool h_inst);
+											 
+	//JJW:										 
+  std::pair<int, Fault>
+  checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTCheck, BaseMMU::Mode mode
+   #if MPT_ENABLED
+       , const MPT& mpt
+     #if MPT_CACHE_ENABLED
+       , MPTCache52& cache
+     #endif
+   #endif
+  );
+	
+	#if MPT_ENABLED
+		// 根据 logBytes 推导出 MPT 的层级（L0~L3）
+		inline int getLevelForPageSizeLog2(uint8_t logBytes);
+	#endif
+	
+	#if MPT_ENABLED
+    Fault createMPTPagefault(Addr vaddr, Addr paForMPTCheck, BaseMMU::Mode mode);
+  #endif
+  //:JJW
+	
     Fault createPagefault(Addr vaddr, Addr gPaddr,BaseMMU::Mode mode,bool G);
 
     PrivilegeMode getMemPriv(ThreadContext *tc, BaseMMU::Mode mode);
