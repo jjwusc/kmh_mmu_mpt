@@ -56,6 +56,16 @@ namespace RiscvISA {
 
 class Walker;
 
+
+struct MPTSenderState : public Packet::SenderState {
+    ThreadContext *tc;
+    BaseMMU::Translation *translation;
+
+    MPTSenderState(ThreadContext *tc_, BaseMMU::Translation *tr_)
+        : tc(tc_), translation(tr_) {}
+};
+
+
 class TLB : public BaseTLB
 {
     typedef std::list<TlbEntry *> EntryList;
@@ -117,7 +127,8 @@ class TLB : public BaseTLB
 	//在tlb。cc中的多级tlb、所有tlb对象都属于TLB类，每个TLB实例不会创建一份 MPT ,使用的是全局变量。globalMPT/mptcache是在mmu_mpt_and_mptcache-Smmpt52.cc中创建的。
 	//相应地，在tlb.cc中定义的TLB类构造函数中，也不包括mpt mptcache的初始化。
 	  #if MPT_CACHE_ENABLED
-	  extern MPTCache52 globalMPTCache;
+	  //extern MPTCache52 globalMPTCache;
+	  extern MPTCache52* globalMPTCache;//JJW2
 	  #endif
 
 	#endif
@@ -214,16 +225,30 @@ class TLB : public BaseTLB
     std::pair<bool, Fault> checkGPermissions(STATUS status, Addr vaddr, Addr gpaddr, BaseMMU::Mode mode, PTESv39 pte,
                                              bool h_inst);
 											 
-	//JJW:										 
+	/*JJW:										 
   std::pair<int, Fault>
   checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTCheck, BaseMMU::Mode mode
    #if MPT_ENABLED
        , const MPT& mpt
      #if MPT_CACHE_ENABLED
-       , MPTCache52& cache
+       , MPTCache52* cache
      #endif
    #endif
   );
+  */
+  //std::pair<int, Fault>
+void
+checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTCheck, BaseMMU::Mode mode,
+    ThreadContext *tc,
+    Translation *translation,
+    RequestPtr req
+ #if MPT_ENABLED
+     , const MPT& mpt
+   #if MPT_CACHE_ENABLED
+     , MPTCache52* cache
+   #endif
+ #endif
+ );
 	
 	#if MPT_ENABLED
 		// 根据 logBytes 推导出 MPT 的层级（L0~L3）

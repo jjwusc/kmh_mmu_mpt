@@ -6,6 +6,7 @@
 // 是否启用 MPT（默认启用，使用 -D__ARCH_RISCV_MMU_MPT_HH__ 禁用）																			 
 #ifndef __ARCH_RISCV_MMU_MPT_HH__
 #define MPT_ENABLED 1
+#include "sim/stat_control.hh" // 如果需要统计
 #else
 #define MPT_ENABLED 0
 #endif
@@ -13,6 +14,7 @@
 // 是否启用 MPT Cache（默认启用，使用 -D__ARCH_RISCV_MMU_MPT_CACHE_HH__ 禁用），前提是 MPT 启用																													
 #if MPT_ENABLED && !defined(__ARCH_RISCV_MMU_MPT_CACHE_HH__)
 #define MPT_CACHE_ENABLED 1
+#include "params/RiscvTLB.hh" //JJW2
 #else
 #define MPT_CACHE_ENABLED 0
 #endif
@@ -190,6 +192,28 @@ struct MPT {
         //未找到叶子，返回无效项
         return MPTE52();
     }
+	
+	
+	
+	 //新增：异步延迟 walk 接口，127 cycle 后触发回调返回结果
+    void walkDelayed(Addr vaddr,
+                     ThreadContext *tc,
+                     std::function<void(MPTE52)> callback) const
+    {
+        Tick delay = 127 * SimClock::Int::ns(); // 模拟127 cycle
+
+        // 使用同步接口立即生成结果（我们只模拟“等这么久才交结果”）
+        MPTE52 result = walk(vaddr);
+
+        // 延迟调用 callback，让请求等127个周期才“拿到”结果
+        tc->getCpuPtr()->schedule(
+            new LambdaEvent([=]() {
+                callback(result);
+            }),
+            curTick() + delay);
+    }
+
+	
 };
 
 
@@ -209,7 +233,8 @@ struct MPT {
 #define MPT_CACHE_SIZE 128    //MPT_CACHE_SIZE 默认为128. 需要在编译时自定义！
 #endif
 
-
+//extern int runtimeMPTCacheSize;//JJW2
+//void initMPTCacheFromParams(const RiscvTLBParams *params);//JJW2
 
 struct MPTCacheEntry {
     Addr tag;                  // region base（对齐后的地址）   目前这个tag用不上，用于查找的key是下面unordered map中的Addr，此处tag的用处为增加调试信息+以后扩展为set-ass时可用
@@ -226,6 +251,7 @@ struct MPTCacheEntry {
 class MPTCache52 {
   private:
     size_t capacity;
+	static int configuredSize;//JJW2  用来存 param 传进来的值（类全局共享）
     std::unordered_map<Addr, MPTCacheEntry> table;
 
     // 根据当前层级获取区域对齐地址（以 MPTE 粒度为单位）
@@ -234,7 +260,13 @@ class MPTCache52 {
     }
 
   public:
-    MPTCache52(size_t cap = MPT_CACHE_SIZE) : capacity(cap) {}
+    //MPTCache52(size_t cap = MPT_CACHE_SIZE) : capacity(cap) {}
+	MPTCache52(size_t cap) : capacity(cap) {}
+	
+	//JJW2 新增默认构造函数：从py参数传进来的静态值初始化
+    MPTCache52() : capacity(configuredSize) {}
+	static void configureSize(int s);
+	void initMPTCacheFromParams(const RiscvTLBParams *params);
 
     // 查表：使用虚拟地址 + 层级作为对齐 key
 	/*
@@ -326,6 +358,74 @@ lookup - 仅查找 MPTCache，若未命中不会触发 walk。
 		return true;
 	}
 */
+	
+	
+	
+	void fetchDelayed(
+		Addr pa,
+		int level,
+		const MPT &mpt,
+		ThreadContext *tc,
+		std::function<void(bool /*hit*/, MPTCacheEntry)> callback) const
+	{
+		Addr aligned = regionAlign(pa, level);
+		auto it = table.find(aligned);
+
+		Tick delay;
+		MPTCacheEntry entry;
+
+		if (it != table.end() && it->second.valid) {
+			// 命中：复制结果，模拟 10 cycle 延迟
+			delay = 10 * SimClock::Int::ns();
+			entry = it->second;
+
+			tc->getCpuPtr()->schedule(
+				new LambdaEvent([=]() {
+					callback(true, entry); // true 表示命中
+				}),
+				curTick() + delay);
+		} else {
+			//未命中：需要走 MPT.walk()，模拟 127 cycle 延迟
+			delay = 127 * SimClock::Int::ns();
+
+			// 实际同步调用 walk（只是延迟结果交付）
+			MPTE52 mpte = mpt.walk(pa);
+			if (!mpte.isValid()) {
+				// 即使无效，也要延迟后 callback → 表示失败
+				tc->getCpuPtr()->schedule(
+					new LambdaEvent([=]() {
+						callback(false, {}); // false 表示失败
+					}),
+					curTick() + delay);
+				return;
+			}
+
+			// 构造 entry（直接插入缓存，等价于同步 fetch 做的事）
+			entry = {
+				aligned,
+				mpte,
+				true,
+				level,
+				log2floor(getRegionSizeForLevel(level))
+			};
+
+			// 为了保持 const 成员函数不动表（可以取消 const 后插入）
+			const_cast<MPTCache52 *>(this)->insert(pa, level, mpte);
+
+			// 延迟回调
+			tc->getCpuPtr()->schedule(
+				new LambdaEvent([=]() {
+					callback(false, entry); // false 表示 miss 但成功 walk
+				}),
+				curTick() + delay);
+		}
+	}
+
+	
+	
+	
+	
+	
 	
 	
 };
