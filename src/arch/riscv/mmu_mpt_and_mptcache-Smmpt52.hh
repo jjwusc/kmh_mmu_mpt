@@ -69,7 +69,7 @@
 // 工具函数区：根据层级获取页大小和区域大小
 // -----------------------------
 
-// 获取当前层级的“单页大小”    运行时获取页大小, 普通的全局 helper 函数，不是属于某个类或结构体的成员函数，放在了命名空间外部
+// 获取当前层级的“单页大小”    运行时获取页大小, 普通的全局 helper 函数，不是属于某个类或结构体的成员函数，放在命名空间外部
 inline uint64_t getPageSizeForLevel(int level) {
     switch (level) {
         case 0: return MPT_LEAF_L0_PAGE_SIZE;
@@ -144,9 +144,23 @@ inline bool checkMPTEPermissions(const MPTE52 &mpte, BaseMMU::Mode mode, Addr ra
         default: return false;
     }
 }
-//调用方式：
-// 假设当前为 level=1，range_offset = vaddr - region_base
-//checkMPTEPermissions(mpte, BaseMMU::Read, range_offset, /*level=*/1);
+
+
+static MPTE52 simulateAllowAll()
+{
+    uint64_t raw = 0;
+    raw |= 0x1; // bit 0: valid
+    raw |= 0x2; // bit 1: leaf
+
+    // 设置16个权限段，每段3bit，为 0b111（R/W/X）
+    for (int i = 0; i < MPT_NUM_PERMS; ++i) {
+        raw |= (uint64_t)(MPT_PERM_R | MPT_PERM_W | MPT_PERM_X)
+               << (2 + i * MPT_PERM_BITS_PER_ENTRY);
+    }
+
+    return MPTE52(raw);
+}
+
 
 
 
@@ -155,19 +169,35 @@ inline bool checkMPTEPermissions(const MPTE52 &mpte, BaseMMU::Mode mode, Addr ra
 struct MPT {
     Addr rootPPN; // 根页表物理页号（页号单位）//TODO：寄存器中获得The physical page number of the root memory protection table is stored in the mmpt register’s PPN field
 
+
+/*
     // 模拟 memory 访问，从物理地址加载一个 64-bit MPTE
     uint64_t readMPTE(Addr paddr) const {
         // TODO: 替换为 GEM5 中访问 memory 的实际方法//一般通过 port->read(...) 或某种 memory interface 读取内存
-        panic("readMPTE not implemented!");
+        //panic("readMPTE not implemented!");
         return 0;
     }
+*/
+
+
+uint64_t readMPTE(Addr paddr) const /*override*/ {
+    return simulateAllowAll().raw;
+}
+
+/*调用方法
+auto mpte = simulateAllowAll();
+printf("simulated raw = 0x%016lx\n", mpte.raw);
+
+*/
+
+
 
     // Smmp52 多级 MPT 遍历，根据虚拟地址返回 MPTE52（或无效项）
     MPTE52 walk(Addr vaddr) const {
         Addr base = rootPPN << 12;  // 页表基地址 = PPN × 4KB（页表页固定为 4KB）
 
         for (int level = MPT_LEVELS - 1; level >= 0; --level) {
-            // 每级使用 9-bit 索引（512 项）
+            // 每级使用9-bit 索引（512 项）
             size_t shift = level * 9 + 12;
             size_t index = (vaddr >> shift) & 0x1FF;
             Addr paddr = base + index * MPT_MPTE_SIZE;
@@ -193,19 +223,19 @@ struct MPT {
         return MPTE52();
     }
 	
-	
+	//all miss, 127*4; L3 hit , else miss,  127*3.   L3 L2 hit , l1 l0 miss, 127*2.   L3 L2 L1 hit , l0 miss 127
 	
 	 //新增：异步延迟 walk 接口，127 cycle 后触发回调返回结果
     void walkDelayed(Addr vaddr,
                      ThreadContext *tc,
                      std::function<void(MPTE52)> callback) const
     {
-        Tick delay = 127 * SimClock::Int::ns(); // 模拟127 cycle
+        Tick delay = /*f(level)*  */ 127 * SimClock::Int::ns(); // 模拟127 cycle
 
-        // 使用同步接口立即生成结果（我们只模拟“等这么久才交结果”）
+        // 使用同步接口立即生成结果（只模拟“等这么久才交结果”）
         MPTE52 result = walk(vaddr);
 
-        // 延迟调用 callback，让请求等127个周期才“拿到”结果
+        // 延迟调用 callback，让请求等127个周期才拿到结果
         tc->getCpuPtr()->schedule(
             new LambdaEvent([=]() {
                 callback(result);
@@ -259,6 +289,22 @@ class MPTCache52 {
         return pa & ~(getRegionSizeForLevel(level) - 1);
     }
 
+
+
+
+	mutable Stats::Scalar mptCacheL1Hits;
+	mutable Stats::Scalar mptCacheL2Hits;
+	mutable Stats::Scalar mptCacheL3Hits;
+
+	mutable Stats::Scalar mptCacheL1Misses;
+	mutable Stats::Scalar mptCacheL2Misses;
+	mutable Stats::Scalar mptCacheL3Misses;
+
+	//void regStats(); // 不需要声明函数，在tlb.hh  tlb.cc中有对应的功能了
+
+
+
+
   public:
     //MPTCache52(size_t cap = MPT_CACHE_SIZE) : capacity(cap) {}
 	MPTCache52(size_t cap) : capacity(cap) {}
@@ -289,7 +335,7 @@ lookup - 仅查找 MPTCache，若未命中不会触发 walk。
 		if (table.size() >= capacity) {
 			// 随机选择一个要删除的 entry   。如果容量已满，随机删除一个现有 entry（无关位置，只为控制表大小，因为采用的实现方式是std::unordered map）
 			auto randomIt = std::next(table.begin(), rand() % table.size());
-			table.erase(randomIt);// 简单淘汰策略
+			table.erase(randomIt);// 简单淘汰策略    //需要改为PLRU
 		}
 		table[aligned] = {
 			aligned,
@@ -316,6 +362,12 @@ lookup - 仅查找 MPTCache，若未命中不会触发 walk。
 		auto it = table.find(aligned);
 		if (it != table.end() && it->second.valid) {
 			entry = it->second;
+			
+			if (level == 0) ++mptCacheL1Hits;
+        else if (level == 1) ++mptCacheL2Hits;
+        else if (level == 2) ++mptCacheL3Hits;
+			
+			
 			return true;
 		}
 
@@ -336,6 +388,11 @@ lookup - 仅查找 MPTCache，若未命中不会触发 walk。
 			table.erase(randomIt);
 		}
 		table[aligned] = entry;
+		
+		
+		if (level == 0) ++mptCacheL1Misses;
+    else if (level == 1) ++mptCacheL2Misses;
+    else if (level == 2) ++mptCacheL3Misses;
 
 		return true;
 	}
@@ -375,13 +432,13 @@ lookup - 仅查找 MPTCache，若未命中不会触发 walk。
 		MPTCacheEntry entry;
 
 		if (it != table.end() && it->second.valid) {
-			// 命中：复制结果，模拟 10 cycle 延迟
+			// 命中：复制结果，模拟 10 cycle 延迟     //4
 			delay = 10 * SimClock::Int::ns();
 			entry = it->second;
 
 			tc->getCpuPtr()->schedule(
 				new LambdaEvent([=]() {
-					callback(true, entry); // true 表示命中
+					callback(true, entry); // true表示命中
 				}),
 				curTick() + delay);
 		} else {
@@ -394,7 +451,7 @@ lookup - 仅查找 MPTCache，若未命中不会触发 walk。
 				// 即使无效，也要延迟后 callback → 表示失败
 				tc->getCpuPtr()->schedule(
 					new LambdaEvent([=]() {
-						callback(false, {}); // false 表示失败
+						callback(false, {}); // false表示失败
 					}),
 					curTick() + delay);
 				return;

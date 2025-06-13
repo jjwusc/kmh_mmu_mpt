@@ -186,7 +186,27 @@ class TLB : public BaseTLB
         statistics::Formula hits;
         statistics::Formula misses;
         statistics::Formula accesses;
+		
+		
+		//JJW
+		statistics::Scalar mptL1Hits;
+		statistics::Scalar mptL1Misses;
+		statistics::Scalar mptL2Hits;
+		statistics::Scalar mptL2Misses;
+		statistics::Scalar mptL3Hits;
+		statistics::Scalar mptL3Misses;
+		statistics::Formula mptTotalHits;
+		statistics::Formula mptTotalMisses;
+		statistics::Formula mptHitRate;
+
+
+		//JJW
+		
+		
     } stats;
+	
+	void regStats() override; //BaseTLB 本身就声明了一个虚函数virtual void regStats();现在实现的是它的覆盖版本
+
 
   public:
     PMAChecker *pma;

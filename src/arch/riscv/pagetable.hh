@@ -63,7 +63,7 @@ struct MPTInfoInTLB
 
 	// 判断 MPT 信息是否可信 // 信任判断：mpt粒度是否 ≥ TLB 粒度
     bool mptinfoTrust(uint8_t tlbLogBytes) const {
-        return this->valid && (this->mptLogBytes >= tlbLogBytes);
+        return this->valid && (this->mptLogBytes >= tlbLogBytes);// replace 'tlbLogBytes' with 'min()'
     }
 
 

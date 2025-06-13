@@ -36,6 +36,12 @@ MPT globalMPT;
 	MPTCache52 globalMPTCache(runtimeMPTCacheSize);
 	*/
 	
+	
+	
+
+	
+	
+	
   #endif
 
 #endif

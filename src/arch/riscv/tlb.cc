@@ -2695,7 +2695,28 @@ TLB::TlbStats::TlbStats(statistics::Group *parent)
                "Total TLB (read and write) misses", readMisses + writeMisses),
       ADD_STAT(accesses, statistics::units::Count::get(),
                "Total TLB (read and write) accesses",
-               readAccesses + writeAccesses)
+               readAccesses + writeAccesses),
+			   
+			   //JJW
+		ADD_STAT(mptL1Hits, statistics::units::Count::get(), "MPT L1 hits"),
+		ADD_STAT(mptL1Misses, statistics::units::Count::get(), "MPT L1 misses"),
+		ADD_STAT(mptL2Hits, statistics::units::Count::get(), "MPT L2 hits"),
+		ADD_STAT(mptL2Misses, statistics::units::Count::get(), "MPT L2 misses"),
+		ADD_STAT(mptL3Hits, statistics::units::Count::get(), "MPT L3 hits"),
+		ADD_STAT(mptL3Misses, statistics::units::Count::get(), "MPT L3 misses"),
+
+		ADD_STAT(mptTotalHits, statistics::units::Count::get(), "Total MPT hits", mptL1Hits + mptL2Hits + mptL3Hits),
+		ADD_STAT(mptTotalMisses, statistics::units::Count::get(), "Total MPT misses", mptL1Misses + mptL2Misses + mptL3Misses),
+		ADD_STAT(mptHitRate, statistics::units::Ratio::get(), "MPT hit rate",
+         mptTotalHits / (mptTotalHits + mptTotalMisses))
+	   
+			   
+			   
+			   
+			   
+			   
+			   
+			   
 {
     l2tlbRemove
         .init(5)
@@ -2707,6 +2728,28 @@ TLB::TlbStats::TlbStats(statistics::Group *parent)
         .init(5)
         .flags(gem5::statistics::total);
 }
+
+
+//JJW
+void TLB::regStats()
+{
+    BaseTLB::regStats();  // 调用父类的统计注册逻辑
+
+    // 绑定定义好的TlbStats到globalMPTCache
+    stats.mptL1Hits.dataPtr(&globalMPTCache.mptCacheL1Hits);
+    stats.mptL1Misses.dataPtr(&globalMPTCache.mptCacheL1Misses);
+    stats.mptL2Hits.dataPtr(&globalMPTCache.mptCacheL2Hits);
+    stats.mptL2Misses.dataPtr(&globalMPTCache.mptCacheL2Misses);
+    stats.mptL3Hits.dataPtr(&globalMPTCache.mptCacheL3Hits);
+    stats.mptL3Misses.dataPtr(&globalMPTCache.mptCacheL3Misses);
+}
+
+
+
+
+
+
+
 
 Port *
 TLB::getTableWalkerPort()
@@ -2759,8 +2802,7 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
      , MPTCache52* cache
    #endif
  #endif
- )
-{
+ )   
 #if !MPT_ENABLED
 
     // 情况 1：MPT 完全禁用，视为永远允许访问
@@ -2938,7 +2980,7 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
 }
 
 
-
+//JJW  //JJW2
 
 #if MPT_ENABLED
 Fault createMPTPagefault(Addr vaddr, Addr paForMPTCheck, BaseMMU::Mode mode)
