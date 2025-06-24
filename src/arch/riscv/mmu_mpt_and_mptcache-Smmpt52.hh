@@ -9,7 +9,9 @@
 #include <cstdint>
 #include <functional>
 #include <cassert>
-
+#include "params/RiscvTLB.hh"
+#include "sim/sim_object.hh"
+#include "arch/riscv/utility.hh"
 
 // 是否启用 MPT（默认启用，使用 -D__ARCH_RISCV_MMU_MPT_HH__ 禁用）																			 
 #ifndef __ARCH_RISCV_MMU_MPT_HH__
