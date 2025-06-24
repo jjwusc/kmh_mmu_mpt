@@ -295,9 +295,14 @@ TLB::l2TLBEvictLRU(int l2TLBlevel, Addr vaddr)
     }
 }
 
+
+
+
+//JJW
+
 TlbEntry *
 TLB::lookup(Addr vpn, uint16_t asid, BaseMMU::Mode mode, bool hidden,
-            bool sign_used,uint8_t translateMode)
+            bool sign_used, uint8_t translateMode)
 {
     TlbEntry *entry = trie.lookup(buildKey(vpn, asid, translateMode));
 
@@ -305,6 +310,56 @@ TLB::lookup(Addr vpn, uint16_t asid, BaseMMU::Mode mode, bool hidden,
         if (entry)
             entry->lruSeq = nextSeq();
 
+        // 增加 ITLB 和 DTLB 的区分统计
+        if (mode == BaseMMU::Execute) {
+            // Instruction TLB 统计
+            stats.iTLBAccesses++;
+            if (!entry)
+                stats.iTLBMisses++;
+            else
+                stats.iTLBHits++;
+        }
+        else if (mode == BaseMMU::Write) {
+            // Data TLB 写
+            stats.writeAccesses++;
+            if (!entry)
+                stats.writeMisses++;
+            else
+                stats.writeHits++;
+        }
+        else {
+            // Data TLB 读
+            stats.readAccesses++;
+            if (!entry)
+                stats.readMisses++;
+            else
+                stats.readHits++;
+        }
+
+        if (entry) {
+            if (entry->isSquashed) {
+                if (mode == BaseMMU::Write)
+                    stats.writeHitsSquashed++;
+                else
+                    stats.readHitsSquashed++;
+            }
+        }
+
+
+        DPRINTF(TLBVerbose, "lookup(vpn=%#x, asid=%#x): %s ppn %#x\n",
+                vpn, asid, entry ? "hit" : "miss", entry ? entry->paddr : 0);
+    }
+
+    if (sign_used) {
+        if (entry) {
+            entry->used = true;
+        }
+    }
+
+    return entry;
+}
+
+/*原来的（增加 ITLB 和 DTLB 的区分统计之前的）：
         if (mode == BaseMMU::Write)
             stats.writeAccesses++;
         else
@@ -322,27 +377,12 @@ TLB::lookup(Addr vpn, uint16_t asid, BaseMMU::Mode mode, bool hidden,
             else
                 stats.readHits++;
         }
+*/
 
-        if (entry) {
-            if (entry->isSquashed) {
-                if (mode == BaseMMU::Write)
-                    stats.writeHitsSquashed++;
-                else
-                    stats.readHitsSquashed++;
-            }
-        }
 
-        DPRINTF(TLBVerbose, "lookup(vpn=%#x, asid=%#x): %s ppn %#x\n",
-                vpn, asid, entry ? "hit" : "miss", entry ? entry->paddr : 0);
-    }
-    if (sign_used) {
-        if (entry) {
-            entry->used = true;
-        }
-    }
 
-    return entry;
-}
+
+
 TlbEntry *
 TLB::lookupForwardPre(Addr vpn, uint64_t asid, bool hidden)
 {
@@ -2698,22 +2738,66 @@ TLB::TlbStats::TlbStats(statistics::Group *parent)
                readAccesses + writeAccesses),
 			   
 			   //JJW
-		ADD_STAT(mptL1Hits, statistics::units::Count::get(), "MPT L1 hits"),
-		ADD_STAT(mptL1Misses, statistics::units::Count::get(), "MPT L1 misses"),
-		ADD_STAT(mptL2Hits, statistics::units::Count::get(), "MPT L2 hits"),
-		ADD_STAT(mptL2Misses, statistics::units::Count::get(), "MPT L2 misses"),
-		ADD_STAT(mptL3Hits, statistics::units::Count::get(), "MPT L3 hits"),
-		ADD_STAT(mptL3Misses, statistics::units::Count::get(), "MPT L3 misses"),
+      ADD_STAT(mptL0Hits, statistics::units::Count::get(), "MPT L0 hits"),
+      ADD_STAT(mptL0Misses, statistics::units::Count::get(), "MPT L0 misses"),
+      ADD_STAT(mptL0Accesses, statistics::units::Count::get(), "MPT L0 accesses", mptL0Hits + mptL0Misses),
+      ADD_STAT(mptL0HitRate, statistics::units::Ratio::get(), "MPT L0 hit rate", mptL0Hits / mptL0Accesses),
+      ADD_STAT(mptL0MissRate, statistics::units::Ratio::get(), "MPT L0 miss rate", mptL0Misses / mptL0Accesses),
 
-		ADD_STAT(mptTotalHits, statistics::units::Count::get(), "Total MPT hits", mptL1Hits + mptL2Hits + mptL3Hits),
-		ADD_STAT(mptTotalMisses, statistics::units::Count::get(), "Total MPT misses", mptL1Misses + mptL2Misses + mptL3Misses),
-		ADD_STAT(mptHitRate, statistics::units::Ratio::get(), "MPT hit rate",
-         mptTotalHits / (mptTotalHits + mptTotalMisses))
+      ADD_STAT(mptL1Hits, statistics::units::Count::get(), "MPT L1 hits"),
+      ADD_STAT(mptL1Misses, statistics::units::Count::get(), "MPT L1 misses"),
+      ADD_STAT(mptL1Accesses, statistics::units::Count::get(), "MPT L1 accesses", mptL1Hits + mptL1Misses),
+      ADD_STAT(mptL1HitRate, statistics::units::Ratio::get(), "MPT L1 hit rate", mptL1Hits / mptL1Accesses),
+      ADD_STAT(mptL1MissRate, statistics::units::Ratio::get(), "MPT L1 miss rate", mptL1Misses / mptL1Accesses),
+
+      ADD_STAT(mptL2Hits, statistics::units::Count::get(), "MPT L2 hits"),
+      ADD_STAT(mptL2Misses, statistics::units::Count::get(), "MPT L2 misses"),
+      ADD_STAT(mptL2Accesses, statistics::units::Count::get(), "MPT L2 accesses", mptL2Hits + mptL2Misses),
+      ADD_STAT(mptL2HitRate, statistics::units::Ratio::get(), "MPT L2 hit rate", mptL2Hits / mptL2Accesses),
+      ADD_STAT(mptL2MissRate, statistics::units::Ratio::get(), "MPT L2 miss rate", mptL2Misses / mptL2Accesses),
+
+      ADD_STAT(mptL3Hits, statistics::units::Count::get(), "MPT L3 hits"),
+      ADD_STAT(mptL3Misses, statistics::units::Count::get(), "MPT L3 misses"),
+      ADD_STAT(mptL3Accesses, statistics::units::Count::get(), "MPT L3 accesses", mptL3Hits + mptL3Misses),
+      ADD_STAT(mptL3HitRate, statistics::units::Ratio::get(), "MPT L3 hit rate", mptL3Hits / mptL3Accesses),
+      ADD_STAT(mptL3MissRate, statistics::units::Ratio::get(), "MPT L3 miss rate", mptL3Misses / mptL3Accesses),
+
+      ADD_STAT(mptSPHits, statistics::units::Count::get(), "MPT SuperPage hits"),
+      ADD_STAT(mptSPMisses, statistics::units::Count::get(), "MPT SuperPage misses"),
+      ADD_STAT(mptSPAccesses, statistics::units::Count::get(), "MPT SuperPage accesses", mptSPHits + mptSPMisses),
+      ADD_STAT(mptSPHitRate, statistics::units::Ratio::get(), "MPT SuperPage hit rate", mptSPHits / mptSPAccesses),
+      ADD_STAT(mptSPMissRate, statistics::units::Ratio::get(), "MPT SuperPage miss rate", mptSPMisses / mptSPAccesses),
+
+      ADD_STAT(mptTotalHits, statistics::units::Count::get(), "Total MPT hits",
+               mptL0Hits + mptL1Hits + mptL2Hits + mptL3Hits + mptSPHits),
+      ADD_STAT(mptTotalMisses, statistics::units::Count::get(), "Total MPT misses",
+               mptL0Misses + mptL1Misses + mptL2Misses + mptL3Misses + mptSPMisses),
+      ADD_STAT(mptTotalAccesses, statistics::units::Count::get(), "Total MPT accesses",
+               mptTotalHits + mptTotalMisses),
+      ADD_STAT(mptHitRate, statistics::units::Ratio::get(), "MPT hit rate",
+               mptTotalHits / mptTotalAccesses),
+      ADD_STAT(mptMissRate, statistics::units::Ratio::get(), "MPT miss rate",
+               mptTotalMisses / mptTotalAccesses)
+
 	   
+		//todo: I/D tlb miss/hit  -->mpt miss/hit	   为了计算总latency
 			   
-			   
-			   
-			   
+		ADD_STAT(iTLBMisses, statistics::units::Count::get(), "Instruction TLB misses"),
+		ADD_STAT(iTLBHits, statistics::units::Count::get(), "Instruction TLB hits"),
+		ADD_STAT(iTLBAccesses, statistics::units::Count::get(), "Instruction TLB accesses",
+				 iTLBHits + iTLBMisses),
+		ADD_STAT(iTLBMissRate, statistics::units::Ratio::get(), "Instruction TLB miss rate",
+				 iTLBMisses / iTLBAccesses),
+	   
+		ADD_STAT(dTLBHits, statistics::units::Count::get(), "Data TLB hits",
+         readHits + writeHits);
+ADD_STAT(dTLBMisses, statistics::units::Count::get(), "Data TLB misses",
+         readMisses + writeMisses);
+ADD_STAT(dTLBAccesses, statistics::units::Count::get(), "Data TLB accesses",
+         readAccesses + writeAccesses);
+ADD_STAT(dTLBMissRate, statistics::units::Ratio::get(), "Data TLB miss rate",
+         dTLBMisses / dTLBAccesses);
+	   
 			   
 			   
 			   
@@ -2735,14 +2819,23 @@ void TLB::regStats()
 {
     BaseTLB::regStats();  // 调用父类的统计注册逻辑
 
-    // 绑定定义好的TlbStats到globalMPTCache
-    stats.mptL1Hits.dataPtr(&globalMPTCache.mptCacheL1Hits);
-    stats.mptL1Misses.dataPtr(&globalMPTCache.mptCacheL1Misses);
-    stats.mptL2Hits.dataPtr(&globalMPTCache.mptCacheL2Hits);
-    stats.mptL2Misses.dataPtr(&globalMPTCache.mptCacheL2Misses);
-    stats.mptL3Hits.dataPtr(&globalMPTCache.mptCacheL3Hits);
-    stats.mptL3Misses.dataPtr(&globalMPTCache.mptCacheL3Misses);
+    // 绑定 MPT 多级统计数据到 globalMPTCache（必须是指针）
+    stats.mptL0Hits.dataPtr(&globalMPTCache->mptCacheL0Hits);
+    stats.mptL0Misses.dataPtr(&globalMPTCache->mptCacheL0Misses);
+
+    stats.mptL1Hits.dataPtr(&globalMPTCache->mptCacheL1Hits);
+    stats.mptL1Misses.dataPtr(&globalMPTCache->mptCacheL1Misses);
+
+    stats.mptL2Hits.dataPtr(&globalMPTCache->mptCacheL2Hits);
+    stats.mptL2Misses.dataPtr(&globalMPTCache->mptCacheL2Misses);
+
+    stats.mptL3Hits.dataPtr(&globalMPTCache->mptCacheL3Hits);
+    stats.mptL3Misses.dataPtr(&globalMPTCache->mptCacheL3Misses);
+
+    stats.mptSPHits.dataPtr(&globalMPTCache->mptCacheSPHits);
+    stats.mptSPMisses.dataPtr(&globalMPTCache->mptCacheSPMisses);
 }
+
 
 
 
@@ -2850,7 +2943,7 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
 	
     MPTCacheEntry cacheEntry;
 	
-	cache->fetchDelayed(paForMPTCheck, level, globalMPT, tc,
+	cache->fetchDelayed(paForMPTCheck, level, globalMPT, tc, pma, pmp
         [=](bool hit, MPTCacheEntry cacheEntry) {
             if (!cacheEntry.valid) {
                 DPRINTF(TLB, "MPTCache fetch failed → [path=3] vaddr=%#lx\n", vaddr);
@@ -2929,7 +3022,7 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
 	
     // Case 2。在这里手动 walk 并构造 MPTInfoInTLB，
     //MPTE52 mpte = globalMPT.walk(paForMPTCheck);
-	mpt.walkDelayed(paForMPTCheck, tc, [=](MPTE52 mpte) {
+	mpt.walkDelayed(paForMPTCheck, tc, pma, pmp,[=](MPTE52 mpte) {
     if (!mpte.isValid()) {
 		//return {3, createMPTPagefault(vaddr, paForMPTCheck, mode)};
 		DPRINTF(TLB, "MPT walk result invalid → [path=3] vaddr=%#lx\n", vaddr);

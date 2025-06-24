@@ -189,17 +189,57 @@ class TLB : public BaseTLB
 		
 		
 		//JJW
-		statistics::Scalar mptL1Hits;
-		statistics::Scalar mptL1Misses;
-		statistics::Scalar mptL2Hits;
-		statistics::Scalar mptL2Misses;
-		statistics::Scalar mptL3Hits;
-		statistics::Scalar mptL3Misses;
-		statistics::Formula mptTotalHits;
-		statistics::Formula mptTotalMisses;
-		statistics::Formula mptHitRate;
+			// MPT 分层统计
+			statistics::Scalar mptL0Hits;
+			statistics::Scalar mptL0Misses;
+			statistics::Formula mptL0Accesses;
+			statistics::Formula mptL0HitRate;
+			statistics::Formula mptL0MissRate;
 
+			statistics::Scalar mptL1Hits;
+			statistics::Scalar mptL1Misses;
+			statistics::Formula mptL1Accesses;
+			statistics::Formula mptL1HitRate;
+			statistics::Formula mptL1MissRate;
 
+			statistics::Scalar mptL2Hits;
+			statistics::Scalar mptL2Misses;
+			statistics::Formula mptL2Accesses;
+			statistics::Formula mptL2HitRate;
+			statistics::Formula mptL2MissRate;
+
+			statistics::Scalar mptL3Hits;
+			statistics::Scalar mptL3Misses;
+			statistics::Formula mptL3Accesses;
+			statistics::Formula mptL3HitRate;
+			statistics::Formula mptL3MissRate;
+
+			statistics::Scalar mptSPHits;
+			statistics::Scalar mptSPMisses;
+			statistics::Formula mptSPAccesses;
+			statistics::Formula mptSPHitRate;
+			statistics::Formula mptSPMissRate;
+
+			// MPT 总体统计
+			statistics::Formula mptTotalHits;
+			statistics::Formula mptTotalMisses;
+			statistics::Formula mptTotalAccesses;
+			statistics::Formula mptHitRate;
+			statistics::Formula mptMissRate;
+			
+			
+			//对iTLB dTLB的区分
+			// Instruction TLB
+			Stats::Scalar iTLBHits;
+			Stats::Scalar iTLBMisses;
+			Stats::Scalar iTLBAccesses;
+			Stats::Formula iTLBMissRate;
+
+			// Data TLB
+			Stats::Scalar dTLBHits;
+			Stats::Scalar dTLBMisses;
+			Stats::Scalar dTLBAccesses;
+			Stats::Formula dTLBMissRate;
 		//JJW
 		
 		
