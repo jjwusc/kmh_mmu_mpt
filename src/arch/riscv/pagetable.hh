@@ -35,7 +35,7 @@
 #include "base/trie.hh"
 #include "base/types.hh"
 #include "sim/serialize.hh"
-#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"  //JJW
+
 
 namespace gem5
 {
@@ -87,7 +87,7 @@ struct MPTInfoInTLB
     }
 };
 
-
+#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"  //JJW   //这个得放到后面，否则会出现循环include时，MPTInfoInTLB还没有被已知的情况。更好的写法是把MPTInfoInTLB单独当做一个hh，所有人include它
 
 
 BitUnion64(SATP)

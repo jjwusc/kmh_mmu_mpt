@@ -1243,45 +1243,22 @@ TLB::L2TLBCheck(PTESv39 pte, int level, STATUS status, PrivilegeMode pmode, Addr
 				#if MPT_CACHE_ENABLED
 					, globalMPTCache
 				#endif
+				#endif
 				);
 
 				// 不提前 return，统一风格：继续走向 return fault
 				fault = NoFault;
-				
-	
-				/*
-                auto [mpt_result, mpt_fault] = checkMPTPermissionFunctionInTLBcc(
-                    nullptr, vaddr, paddr, mode
-                    #if MPT_ENABLED
-                        , globalMPT
-                        #if MPT_CACHE_ENABLED
-                            , globalMPTCache
-                        #endif
-                    #endif
-                );
 
-                if (mpt_fault != NoFault) {
-                    fault = mpt_fault;
-                }
-            }   */
-
-
-
-
-
-
-
-            //:JJW
-
-        } else { //else对应的情况只是一个中间页表的指针页，不能直接转换出物理地址，不需要调用 checkPermissions(...)，不需要做 MPT 权限检查
-            level--;
-            if (level < 0) {
-                hitInSp = true;
-                fault = L2TLBPagefault(vaddr, mode, req, isPre, is_back_pre);
-            } else {
-                hitInSp = false;
-            }
-        }
+			} else { //else对应的情况只是一个中间页表的指针页，不能直接转换出物理地址，不需要调用 checkPermissions(...)，不需要做 MPT 权限检查
+				level--;
+				if (level < 0) {
+					hitInSp = true;
+					fault = L2TLBPagefault(vaddr, mode, req, isPre, is_back_pre);
+				} else {
+					hitInSp = false;
+				}
+			}
+		}
     }
     DPRINTF(TLB, "tlb check final\n");
     if (fault == NoFault)
@@ -1294,6 +1271,8 @@ TLB::L2TLBCheck(PTESv39 pte, int level, STATUS status, PrivilegeMode pmode, Addr
     }
     return fault;
 }
+
+
 bool
 TLB::checkPrePrecision(uint64_t &removeNoUsePre, uint64_t &usedPre)
 {
@@ -2900,6 +2879,7 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
    #endif
  #endif
  )   
+{
 #if !MPT_ENABLED
 
     // 情况 1：MPT 完全禁用，视为永远允许访问
@@ -2955,36 +2935,36 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
                 return;
             }
 	
-	/*
-	if (!globalMPTCache->fetch(paForMPTCheck, level, globalMPT, cacheEntry)) { 
-    //if (!globalMPTCache.fetch(paForMPTCheck, level, globalMPT, cacheEntry)) {  //fetch 参数中的&entry是调用者传入的空壳对象，由函数内部填充内容返回出去。先MPTCacheEntry cacheEntry; 声明一个临时变量,fetch()内部会自动填写它
-        //这个填进去的的临时变量，用来：提取 mpte.perms()；生成 offset；更新 TLBEntry::mptInfo 等
-		return {3, createMPTPagefault(vaddr, paForMPTCheck, mode)}; // cache 和 walk 都失败
-    }*/
+			/*
+			if (!globalMPTCache->fetch(paForMPTCheck, level, globalMPT, cacheEntry)) { 
+			//if (!globalMPTCache.fetch(paForMPTCheck, level, globalMPT, cacheEntry)) {  //fetch 参数中的&entry是调用者传入的空壳对象，由函数内部填充内容返回出去。先MPTCacheEntry cacheEntry; 声明一个临时变量,fetch()内部会自动填写它
+				//这个填进去的的临时变量，用来：提取 mpte.perms()；生成 offset；更新 TLBEntry::mptInfo 等
+				return {3, createMPTPagefault(vaddr, paForMPTCheck, mode)}; // cache 和 walk 都失败
+			}*/
 
-    
-	// Case 3: 成功，计算 offset 和权限；回填 TLB 的 mptInfo；提取权限
-    Addr offset = paForMPTCheck - cacheEntry.tag;
-    entry->mptInfo = MPTInfoInTLB::fromEntry(cacheEntry, offset);
+			
+			// Case 3: 成功，计算 offset 和权限；回填 TLB 的 mptInfo；提取权限
+			Addr offset = paForMPTCheck - cacheEntry.tag;
+			entry->mptInfo = MPTInfoInTLB::fromEntry(cacheEntry, offset);
 
-    uint8_t pi = (offset >> getPageShiftForLevel(level)) & 0xF;
-    uint8_t perm = cacheEntry.mpte.perms(pi);
-    bool hasPerm = false;
+			uint8_t pi = (offset >> getPageShiftForLevel(level)) & 0xF;
+			uint8_t perm = cacheEntry.mpte.perms(pi);
+			bool hasPerm = false;
 
-    switch (mode) {
-        case BaseMMU::Read:    hasPerm = perm & MPT_PERM_R; break;
-        case BaseMMU::Write:   hasPerm = perm & MPT_PERM_W; break;
-        case BaseMMU::Execute: hasPerm = perm & MPT_PERM_X; break;
-        default: break;
-    }
-/*
-    if (hasPerm)
-        return {1, NoFault};
-    else
-        return {1, createMPTPagefault(vaddr, paForMPTCheck, mode)};
-*/
-	Fault fault = hasPerm ? NoFault : createMPTPagefault(vaddr, paForMPTCheck, mode);
-	translation->finish(fault, req, tc, mode);
+			switch (mode) {
+				case BaseMMU::Read:    hasPerm = perm & MPT_PERM_R; break;
+				case BaseMMU::Write:   hasPerm = perm & MPT_PERM_W; break;
+				case BaseMMU::Execute: hasPerm = perm & MPT_PERM_X; break;
+				default: break;
+			}
+		/*
+			if (hasPerm)
+				return {1, NoFault};
+			else
+				return {1, createMPTPagefault(vaddr, paForMPTCheck, mode)};
+		*/
+			Fault fault = hasPerm ? NoFault : createMPTPagefault(vaddr, paForMPTCheck, mode);
+			translation->finish(fault, req, tc, mode);
         }
     );
 
@@ -3027,45 +3007,45 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
     // Case 2。在这里手动 walk 并构造 MPTInfoInTLB，
     //MPTE52 mpte = globalMPT.walk(paForMPTCheck);
 	mpt.walkDelayed(paForMPTCheck, tc, pma, pmp,[=](MPTE52 mpte) {
-    if (!mpte.isValid()) {
-		//return {3, createMPTPagefault(vaddr, paForMPTCheck, mode)};
-		DPRINTF(TLB, "MPT walk result invalid → [path=3] vaddr=%#lx\n", vaddr);
-        translation->finish(createMPTPagefault(vaddr, paForMPTCheck, mode), req, tc, mode);
-        return;
+		if (!mpte.isValid()) {
+			//return {3, createMPTPagefault(vaddr, paForMPTCheck, mode)};
+			DPRINTF(TLB, "MPT walk result invalid → [path=3] vaddr=%#lx\n", vaddr);
+			translation->finish(createMPTPagefault(vaddr, paForMPTCheck, mode), req, tc, mode);
+			return;
+			}
+
+		Addr regionBase = paForMPTCheck  & ~(getRegionSizeForLevel(level) - 1);
+		Addr offset = paForMPTCheck  - regionBase;
+
+		uint8_t pi = (offset >> getPageShiftForLevel(level)) & 0xF;
+		uint8_t perm = mpte.perms(pi);
+
+		//回填 mptInfo//这段逻辑是在 127 cycle 之后被 schedule 执行
+		entry->mptInfo.valid = true;
+		entry->mptInfo.perm_r = (perm & MPT_PERM_R) != 0;
+		entry->mptInfo.perm_w = (perm & MPT_PERM_W) != 0;
+		entry->mptInfo.perm_x = (perm & MPT_PERM_X) != 0;
+		entry->mptInfo.mptLogBytes = log2floor(getRegionSizeForLevel(level));
+		entry->mptInfo.reserved = 0;
+
+		bool hasPerm = false;
+		switch (mode) {
+			case BaseMMU::Read:    hasPerm = perm & MPT_PERM_R; break;
+			case BaseMMU::Write:   hasPerm = perm & MPT_PERM_W; break;
+			case BaseMMU::Execute: hasPerm = perm & MPT_PERM_X; break;
+			default: break;
 		}
 
-    Addr regionBase = paForMPTCheck  & ~(getRegionSizeForLevel(level) - 1);
-    Addr offset = paForMPTCheck  - regionBase;
+		/*
+		if (hasPerm)
+			return {2, NoFault};
+		else
+			return {2, createMPTPagefault(vaddr, paForMPTCheck, mode)};
+		*/
 
-    uint8_t pi = (offset >> getPageShiftForLevel(level)) & 0xF;
-    uint8_t perm = mpte.perms(pi);
-
-    //回填 mptInfo//这段逻辑是在 127 cycle 之后被 schedule 执行
-    entry->mptInfo.valid = true;
-    entry->mptInfo.perm_r = (perm & MPT_PERM_R) != 0;
-    entry->mptInfo.perm_w = (perm & MPT_PERM_W) != 0;
-    entry->mptInfo.perm_x = (perm & MPT_PERM_X) != 0;
-    entry->mptInfo.mptLogBytes = log2floor(getRegionSizeForLevel(level));
-    entry->mptInfo.reserved = 0;
-
-    bool hasPerm = false;
-    switch (mode) {
-        case BaseMMU::Read:    hasPerm = perm & MPT_PERM_R; break;
-        case BaseMMU::Write:   hasPerm = perm & MPT_PERM_W; break;
-        case BaseMMU::Execute: hasPerm = perm & MPT_PERM_X; break;
-        default: break;
-    }
-
-/*
-    if (hasPerm)
-        return {2, NoFault};
-    else
-        return {2, createMPTPagefault(vaddr, paForMPTCheck, mode)};
-*/
-
-	Fault fault = hasPerm ? NoFault : createMPTPagefault(vaddr, paForMPTCheck, mode);
-    translation->finish(fault, req, tc, mode);
-});
+		Fault fault = hasPerm ? NoFault : createMPTPagefault(vaddr, paForMPTCheck, mode);
+		translation->finish(fault, req, tc, mode);
+	});
 
     // 提前 return（等待 finish 回调）
     return;

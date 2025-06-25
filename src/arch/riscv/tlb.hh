@@ -125,8 +125,7 @@ class TLB : public BaseTLB
 	//JJW:
 
 	#if MPT_ENABLED
-	extern gem5::RiscvISA::MPT globalMPT;//mpt的rootPPN在C++中作为POD类型的struct会自动默认初始化为0而不是乱码，但这显然不是想访问的MPT表起始地址
-	//在tlb。cc中的多级tlb、所有tlb对象都属于TLB类，每个TLB实例不会创建一份 MPT ,使用的是全局变量。globalMPT/mptcache是在mmu_mpt_and_mptcache-Smmpt52.cc中创建的。
+	extern gem5::RiscvISA::MPT globalMPT;//globalMPT/mptcache是在mmu_mpt_and_mptcache-Smmpt52.cc中创建的。
 	//相应地，在tlb.cc中定义的TLB类构造函数中，也不包括mpt mptcache的初始化。
 	  #if MPT_CACHE_ENABLED
 	  //extern MPTCache52 globalMPTCache;

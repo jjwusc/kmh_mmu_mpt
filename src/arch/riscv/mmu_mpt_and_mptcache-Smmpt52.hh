@@ -311,7 +311,7 @@ struct MPT {
 
         // 延迟调用 callback，让请求等127个周期才拿到结果
         tc->getCpuPtr()->schedule(
-            new LambdaEvent([=, delay]() {
+            new LambdaEvent([=]() {
                 callback(result);
             }),
             curTick() + delay);
@@ -648,7 +648,7 @@ class MPTCache52 {
 			else ++globalMPT->mptCacheSPHits;
 
 			tc->getCpuPtr()->schedule(
-				new LambdaEvent([=, delay]() {
+				new LambdaEvent([=]() {
 					callback(true, entry);// true表示命中
 				}),
 				curTick() + delay);
