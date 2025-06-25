@@ -8,7 +8,7 @@
 #include <cstdint> //uint64_t （来自 stdint.h / cstdint 头文件）
 #include <functional>
 #include <cassert>
-#include "arch/riscv/tlb.hh" //RiscvTLBParams SimObject 相关的 Params 类型，绝大多数都通过 include 相应模块的主类头文件自动引入。
+//#include "arch/riscv/tlb.hh" //RiscvTLBParams SimObject 相关的 Params 类型，绝大多数都通过 include 相应模块的主类头文件自动引入。
 #include "params/RiscvTLB.hh" //RiscvTLBParams
 #include "sim/sim_object.hh"
 #include "arch/riscv/utility.hh"
