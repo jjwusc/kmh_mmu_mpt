@@ -2,16 +2,32 @@
 #define __ARCH_RISCV_MMU_MPT_AND_CACHE_SMMPT52_HH__
 
 #include <unordered_map>
-#include "arch/riscv/pma_checker.hh"
-#include "arch/riscv/pmp.hh"
+#include "arch/riscv/isa.hh" //PrivilegeMode)，getMemPriv(tc, BaseMMU::Read);
 #include <vector>
 #include <optional>
-#include <cstdint>
+#include <cstdint> //uint64_t （来自 stdint.h / cstdint 头文件）
 #include <functional>
 #include <cassert>
-#include "params/RiscvTLB.hh"
+#include "arch/riscv/tlb.hh" //RiscvTLBParams SimObject 相关的 Params 类型，绝大多数都通过 include 相应模块的主类头文件自动引入。
+#include "params/RiscvTLB.hh" //RiscvTLBParams
 #include "sim/sim_object.hh"
 #include "arch/riscv/utility.hh"
+#include "base/types.hh"      // for Addr, uint64_t 等类型， 否则用不了!!!!!!，    //typedef uint64_t Tick;
+#include "arch/riscv/mmu.hh"  // for BaseMMU::Mode
+#include "arch/riscv/pma_checker.hh"  // PMAChecker
+#include "arch/riscv/pmp.hh"       // PMP
+#include "sim/thread_context.hh"   // ThreadContext
+#include "base/logging.hh"         // DPRINTF 等调试宏
+#include "sim/serialize.hh"        // checkpoint 支持
+#include "sim/request.hh"  //在 gem5 里，RequestPtr 是：using RequestPtr = std::shared_ptr<Request>;Request 这个类定义在：sim/request.hh
+#include "arch/riscv/isa.hh"  //PrivilegeMode	
+#include "sim/faults.hh"  //Fault	  fault不再riscvISA作用域，得用全名  gem5::Fault fault;
+#include "sim/eventq.hh" //LambdaEvent
+#include "cpu/thread_context.hh" //tc
+#include "sim/core.hh"   //curTick()
+#include "base/logging.hh" //宏	功能DPRINTF(...)	调试打印 (需要开启调试标志)panic(...)	触发严重错误中止运行warn(...)	警告信息inform(...)	普通信息输出
+#include "base/statistics.hh" ////statistics::Scalar
+//#include "sim/translation.hh" //translation
 
 // 是否启用 MPT（默认启用，使用 -D__ARCH_RISCV_MMU_MPT_HH__ 禁用）																			 
 #ifndef __ARCH_RISCV_MMU_MPT_HH__
@@ -32,6 +48,8 @@
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+namespace gem5 {
+namespace RiscvISA {
 
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -229,7 +247,7 @@ struct MPT {
 
 		// ③ PMP 检查
 		PrivilegeMode pmode = getMemPriv(tc, BaseMMU::Read);
-		Fault fault = pmp->pmpCheck(req, BaseMMU::Read, pmode, tc);
+		gem5::Fault fault = pmp->pmpCheck(req, BaseMMU::Read, pmode, tc);
 
 		if (fault != NoFault) {
 			panic("PMP blocked access to MPTE at 0x%lx\n", paddr);
@@ -293,7 +311,7 @@ struct MPT {
 
         // 延迟调用 callback，让请求等127个周期才拿到结果
         tc->getCpuPtr()->schedule(
-            new LambdaEvent([=]() {
+            new LambdaEvent([=, delay]() {
                 callback(result);
             }),
             curTick() + delay);
@@ -361,18 +379,18 @@ class MPTCache52 {
 
 
 		// MPTCache 分级命中统计项
-		mutable Stats::Scalar mptCacheL0Hits;
-		mutable Stats::Scalar mptCacheL1Hits;
-		mutable Stats::Scalar mptCacheL2Hits;
-		mutable Stats::Scalar mptCacheL3Hits;
-		mutable Stats::Scalar mptCacheSPHits;
+		mutable statistics::Scalar mptCacheL0Hits;
+		mutable statistics::Scalar mptCacheL1Hits;
+		mutable statistics::Scalar mptCacheL2Hits;
+		mutable statistics::Scalar mptCacheL3Hits;
+		mutable statistics::Scalar mptCacheSPHits;
 
 		// MPTCache 分级未命中统计项
-		mutable Stats::Scalar mptCacheL0Misses;
-		mutable Stats::Scalar mptCacheL1Misses;
-		mutable Stats::Scalar mptCacheL2Misses;
-		mutable Stats::Scalar mptCacheL3Misses;
-		mutable Stats::Scalar mptCacheSPMisses;
+		mutable statistics::Scalar mptCacheL0Misses;
+		mutable statistics::Scalar mptCacheL1Misses;
+		mutable statistics::Scalar mptCacheL2Misses;
+		mutable statistics::Scalar mptCacheL3Misses;
+		mutable statistics::Scalar mptCacheSPMisses;
 
 
 	//void regStats(); // 不需要声明函数，在tlb.hh  tlb.cc中有对应的功能了
@@ -564,14 +582,25 @@ class MPTCache52 {
 */	
  
  
-	std::unordered_map<Addr, MPTCacheEntry>& getTableByLevel(int level) const {
-		if (level == 0) return const_cast<MPTCache52*>(this)->tableL0;
-		else if (level == 1) return const_cast<MPTCache52*>(this)->tableL1;
-		else if (level == 2) return const_cast<MPTCache52*>(this)->tableL2;
-		else if (level == 3) return const_cast<MPTCache52*>(this)->tableL3;
-		else return const_cast<MPTCache52*>(this)->tableSP;
+	// 非 const 版本：允许修改
+	std::unordered_map<Addr, MPTCacheEntry>& getTableByLevel(int level) {
+		if (level == 0) return tableL0;
+		else if (level == 1) return tableL1;
+		else if (level == 2) return tableL2;
+		else if (level == 3) return tableL3;
+		else return tableSP;
 	}
-	
+
+	// const 版本：只读
+	const std::unordered_map<Addr, MPTCacheEntry>& getTableByLevel(int level) const {
+		if (level == 0) return tableL0;
+		else if (level == 1) return tableL1;
+		else if (level == 2) return tableL2;
+		else if (level == 3) return tableL3;
+		else return tableSP;
+	}
+
+	// 允许修改
 	size_t& getCapacityByLevel(int level) {
 		if (level == 0) return capacityL0;
 		else if (level == 1) return capacityL1;
@@ -579,6 +608,16 @@ class MPTCache52 {
 		else if (level == 3) return capacityL3;
 		else return capacitySP;
 	}
+
+	// 只读版本（如果需要在 const 函数中读取容量）
+	size_t getCapacityByLevel(int level) const {
+		if (level == 0) return capacityL0;
+		else if (level == 1) return capacityL1;
+		else if (level == 2) return capacityL2;
+		else if (level == 3) return capacityL3;
+		else return capacitySP;
+	}
+
 
 
 
@@ -589,6 +628,7 @@ class MPTCache52 {
 		ThreadContext *tc,
 		PMAChecker *pma, PMP *pmp,
 		std::function<void(bool /*hit*/, MPTCacheEntry)> callback) const
+		//callback是一个函数指针的封装，类型是：std::function<void(bool, MPTCacheEntry)>
 	{
 		Addr aligned = regionAlign(pa, level);
 		auto& table = getTableByLevel(level);
@@ -600,14 +640,15 @@ class MPTCache52 {
 			MPTCacheEntry entry = it->second;
 
 			// 统计命中
-			if (level == 0) ++mptCacheL0Hits;
-			else if (level == 1) ++mptCacheL1Hits;
-			else if (level == 2) ++mptCacheL2Hits;
-			else if (level == 3) ++mptCacheL3Hits;
-			else ++mptCacheSPHits;
+			 //++globalMPT->mptCacheL1Misses;
+			if (level == 0) ++globalMPT->mptCacheL0Hits;
+			else if (level == 1) ++globalMPT->mptCacheL1Hits;
+			else if (level == 2) ++globalMPT->mptCacheL2Hits;
+			else if (level == 3) ++globalMPT->mptCacheL3Hits;
+			else ++globalMPT->mptCacheSPHits;
 
 			tc->getCpuPtr()->schedule(
-				new LambdaEvent([=]() {
+				new LambdaEvent([=, delay]() {
 					callback(true, entry);// true表示命中
 				}),
 				curTick() + delay);
@@ -621,23 +662,32 @@ class MPTCache52 {
 					}
 
 					// 插入缓存
+					auto& table_mut = this->getTableByLevel(level);
+					size_t& cap = this->getCapacityByLevel(level);
+
+					if (table_mut.size() >= cap) {
+						auto randomIt = std::next(table_mut.begin(), rand() % table_mut.size());
+						table_mut.erase(randomIt);
+					}
+/*
 					auto& table_mut = const_cast<MPTCache52*>(this)->getTableByLevel(level);
 					size_t& cap = const_cast<MPTCache52*>(this)->getCapacityByLevel(level);
 					if (table_mut.size() >= cap) {
 						auto randomIt = std::next(table_mut.begin(), rand() % table_mut.size());
 						table_mut.erase(randomIt);
 					}
+*/
 					MPTCacheEntry entry = {
 						aligned, mpte, true, level, log2floor(getRegionSizeForLevel(level))
 					};
 					table_mut[aligned] = entry;
 
 					// 统计未命中
-					if (level == 0) ++mptCacheL0Misses;
-					else if (level == 1) ++mptCacheL1Misses;
-					else if (level == 2) ++mptCacheL2Misses;
-					else if (level == 3) ++mptCacheL3Misses;
-					else ++mptCacheSPMisses;
+					if (level == 0) ++globalMPT->mptCacheL0Misses;
+					else if (level == 1) ++globalMPT->mptCacheL1Misses;
+					else if (level == 2) ++globalMPT->mptCacheL2Misses;
+					else if (level == 3) ++globalMPT->mptCacheL3Misses;
+					else ++globalMPT->mptCacheSPMisses;
 
 					callback(false, entry);
 				}
@@ -653,6 +703,7 @@ class MPTCache52 {
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+} // namespace RiscvISA
+} // namespace gem5
 
 #endif // __ARCH_RISCV_MMU_MPT_AND_CACHE_SMMPT52_HH__

@@ -42,10 +42,14 @@ namespace gem5
 
 namespace RiscvISA {
 	
-
-
-
 // JJW: 
+inline int getPageShiftForLevel(int level)
+{
+    return log2floor(getPageSizeForLevel(level));
+}
+
+
+
 //存入 TLB 的 MPT 相关信息（权限 + 粒度）
 struct MPTInfoInTLB
 {

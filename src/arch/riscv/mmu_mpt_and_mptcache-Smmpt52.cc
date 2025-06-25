@@ -1,5 +1,7 @@
 #include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"
-
+namespace gem5 {
+namespace RiscvISA {
+	
 #if MPT_ENABLED
 MPT globalMPT;
 
@@ -72,3 +74,5 @@ MPT globalMPT;
 
 
 
+} // namespace RiscvISA
+} // namespace gem5

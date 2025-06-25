@@ -44,6 +44,7 @@
 #include "mem/request.hh"
 #include "params/RiscvTLB.hh"
 #include "sim/sim_object.hh"
+#include "sim/translation.hh" //translation
 
 namespace gem5
 {
@@ -122,13 +123,14 @@ class TLB : public BaseTLB
     Walker *walker;
 	
 	//JJW:
+
 	#if MPT_ENABLED
-	extern MPT globalMPT;//mpt的rootPPN在C++中作为POD类型的struct会自动默认初始化为0而不是乱码，但这显然不是想访问的MPT表起始地址
+	extern gem5::RiscvISA::MPT globalMPT;//mpt的rootPPN在C++中作为POD类型的struct会自动默认初始化为0而不是乱码，但这显然不是想访问的MPT表起始地址
 	//在tlb。cc中的多级tlb、所有tlb对象都属于TLB类，每个TLB实例不会创建一份 MPT ,使用的是全局变量。globalMPT/mptcache是在mmu_mpt_and_mptcache-Smmpt52.cc中创建的。
 	//相应地，在tlb.cc中定义的TLB类构造函数中，也不包括mpt mptcache的初始化。
 	  #if MPT_CACHE_ENABLED
 	  //extern MPTCache52 globalMPTCache;
-	  extern MPTCache52* globalMPTCache;//JJW2
+	  extern gem5::RiscvISA::MPTCache52* globalMPTCache;//JJW2
 	  #endif
 
 	#endif
@@ -230,16 +232,16 @@ class TLB : public BaseTLB
 			
 			//对iTLB dTLB的区分
 			// Instruction TLB
-			Stats::Scalar iTLBHits;
-			Stats::Scalar iTLBMisses;
-			Stats::Scalar iTLBAccesses;
-			Stats::Formula iTLBMissRate;
+			statistics::Scalar iTLBHits;
+			statistics::Scalar iTLBMisses;
+			statistics::Scalar iTLBAccesses;
+			statistics::Formula iTLBMissRate;
 
 			// Data TLB
-			Stats::Scalar dTLBHits;
-			Stats::Scalar dTLBMisses;
-			Stats::Scalar dTLBAccesses;
-			Stats::Formula dTLBMissRate;
+			statistics::Scalar dTLBHits;
+			statistics::Scalar dTLBMisses;
+			statistics::Scalar dTLBAccesses;
+			statistics::Formula dTLBMissRate;
 		//JJW
 		
 		
