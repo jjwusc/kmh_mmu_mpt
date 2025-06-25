@@ -44,7 +44,7 @@
 #include "mem/request.hh"
 #include "params/RiscvTLB.hh"
 #include "sim/sim_object.hh"
-#include "sim/translation.hh" //translation
+#include "cpu/translation.hh" //translation  class DataTranslation : public BaseMMU::Translation
 
 namespace gem5
 {

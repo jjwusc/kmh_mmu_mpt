@@ -16,7 +16,7 @@
 #include "arch/riscv/mmu.hh"  // for BaseMMU::Mode
 #include "arch/riscv/pma_checker.hh"  // PMAChecker
 #include "arch/riscv/pmp.hh"       // PMP
-#include "sim/thread_context.hh"   // ThreadContext
+//#include "sim/thread_context.hh"   // ThreadContext //新版本 gem5（比如 22.x 之后，尤其是 RISCV 相关架构逐步完善以后），thread_context 已经统一放在 cpu/thread_context.hh。
 #include "base/logging.hh"         // DPRINTF 等调试宏
 #include "sim/serialize.hh"        // checkpoint 支持
 #include "sim/request.hh"  //在 gem5 里，RequestPtr 是：using RequestPtr = std::shared_ptr<Request>;Request 这个类定义在：sim/request.hh
@@ -27,7 +27,7 @@
 #include "sim/core.hh"   //curTick()
 #include "base/logging.hh" //宏	功能DPRINTF(...)	调试打印 (需要开启调试标志)panic(...)	触发严重错误中止运行warn(...)	警告信息inform(...)	普通信息输出
 #include "base/statistics.hh" ////statistics::Scalar
-//#include "sim/translation.hh" //translation
+#include "cpu/translation.hh" //translation  class DataTranslation : public BaseMMU::Translation
 
 // 是否启用 MPT（默认启用，使用 -D__ARCH_RISCV_MMU_MPT_HH__ 禁用）																			 
 #ifndef __ARCH_RISCV_MMU_MPT_HH__

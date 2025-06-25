@@ -62,7 +62,7 @@
 #include "sim/eventq.hh" //LambdaEvent
 #include "base/types.hh"      // for Addr, uint64_t 等类型， 否则用不了   //typedef uint64_t Tick;
 #include "base/statistics.hh" //statistics::Scalar
-
+#include "cpu/translation.hh" //translation  class DataTranslation : public BaseMMU::Translation
 
 namespace gem5
 {
