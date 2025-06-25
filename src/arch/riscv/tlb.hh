@@ -45,6 +45,7 @@
 #include "params/RiscvTLB.hh"
 #include "sim/sim_object.hh"
 #include "cpu/translation.hh" //translation  class DataTranslation : public BaseMMU::Translation
+#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"
 
 namespace gem5
 {
