@@ -19,7 +19,7 @@
 //#include "sim/thread_context.hh"   // ThreadContext //新版本 gem5（比如 22.x 之后，尤其是 RISCV 相关架构逐步完善以后），thread_context 已经统一放在 cpu/thread_context.hh。
 #include "base/logging.hh"         // DPRINTF 等调试宏
 #include "sim/serialize.hh"        // checkpoint 支持
-#include "sim/request.hh"  //在 gem5 里，RequestPtr 是：using RequestPtr = std::shared_ptr<Request>;Request 这个类定义在：sim/request.hh
+#include "mem/request.hh"  //在 gem5 里，RequestPtr 是：using RequestPtr = std::shared_ptr<Request>;Request 这个类定义在：mem/request.hh
 #include "arch/riscv/isa.hh"  //PrivilegeMode	
 #include "sim/faults.hh"  //Fault	  fault不再riscvISA作用域，得用全名  gem5::Fault fault;
 #include "sim/eventq.hh" //LambdaEvent
@@ -30,20 +30,20 @@
 #include "cpu/translation.hh" //translation  class DataTranslation : public BaseMMU::Translation
 
 // 是否启用 MPT（默认启用，使用 -D__ARCH_RISCV_MMU_MPT_HH__ 禁用）																			 
-#ifndef __ARCH_RISCV_MMU_MPT_HH__
+//#ifndef __ARCH_RISCV_MMU_MPT_HH__
 #define MPT_ENABLED 1
 #include "sim/stat_control.hh" // 如果需要统计
-#else
-#define MPT_ENABLED 0
-#endif
+//#else
+//#define MPT_ENABLED 0
+//#endif
 
 // 是否启用 MPT Cache（默认启用，使用 -D__ARCH_RISCV_MMU_MPT_CACHE_HH__ 禁用），前提是 MPT 启用																													
-#if MPT_ENABLED && !defined(__ARCH_RISCV_MMU_MPT_CACHE_HH__)
+//#if MPT_ENABLED && !defined(__ARCH_RISCV_MMU_MPT_CACHE_HH__)
 #define MPT_CACHE_ENABLED 1
 #include "params/RiscvTLB.hh" //JJW2
-#else
-#define MPT_CACHE_ENABLED 0
-#endif
+//#else
+//#define MPT_CACHE_ENABLED 0
+//#endif
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
