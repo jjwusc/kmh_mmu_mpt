@@ -193,6 +193,13 @@ main = Environment(tools=[
         ConfigFile, AddLocalRPATH, SwitchingHeaders, TagImpliesTool, Blob
     ])
 
+# JJW: Enable MPT experimental macros
+main.Append(CPPDEFINES=[
+    'MPT_ENABLED=1',
+    'MPT_CACHE_ENABLED=1',
+])
+
+
 main.Tool(SCons.Tool.FindTool(['gcc', 'clang'], main))
 main.Tool(SCons.Tool.FindTool(['g++', 'clang++'], main))
 
