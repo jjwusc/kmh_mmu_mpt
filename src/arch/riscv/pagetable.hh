@@ -35,7 +35,7 @@
 #include "base/trie.hh"
 #include "base/types.hh"
 #include "sim/serialize.hh"
-
+#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"
 
 namespace gem5
 {
