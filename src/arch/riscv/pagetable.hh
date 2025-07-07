@@ -45,8 +45,16 @@ namespace RiscvISA {
 // JJW: 
 inline int getPageShiftForLevel(int level)
 {
-    return log2floor(getPageSizeForLevel(level));
+	// 返回每个层级的页大小对应的 log2 值
+    switch (level) {
+        case 0: return 12; // log2(4KB)
+        case 1: return 21; // log2(2MB)
+        case 2: return 30; // log2(1GB)
+        case 3: return 39; // log2(512GB)
+        default: panic("Invalid MPT level: %d", level);
+    }
 }
+
 
 
 
