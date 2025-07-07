@@ -5,6 +5,7 @@
 //#include "arch/riscv/pmp.hh"
 //#include "cpu/thread_context.hh"
 //#include "mem/request.hh"
+#include "arch/riscv/tlb.hh"
 
 
 
