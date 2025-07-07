@@ -45,6 +45,7 @@ namespace RiscvISA {
 // JJW: 
 
 #include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"
+#include <type_traits>
 
 #if MPT_ENABLED 
 inline int getPageShiftForLevel(int level)
