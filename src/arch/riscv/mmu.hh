@@ -35,6 +35,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+
+
+/*
 #ifndef __ARCH_RISCV_MMU_HH__
 #define __ARCH_RISCV_MMU_HH__
 
@@ -106,6 +109,46 @@ class MMU : public BaseMMU
       static_cast<TLB*>(dtb)->useNewPriv(tc);
       static_cast<TLB*>(itb)->useNewPriv(tc);
     }
+};
+
+} // namespace RiscvISA
+} // namespace gem5
+
+#endif  // __ARCH_RISCV_MMU_HH__
+*/
+
+//JJW:原先的mmu.hh全部采用内联形式，不存在mmu.cc，可能导致了可拓展性降低和依赖复杂，导致加入mpt机制之后mmu.hhw无法使用。现拆开mmu.cc
+#ifndef __ARCH_RISCV_MMU_HH__
+#define __ARCH_RISCV_MMU_HH__
+
+#include "arch/generic/mmu.hh"
+#include "arch/riscv/isa.hh"
+#include "arch/riscv/page_size.hh"
+#include "arch/riscv/pma_checker.hh"
+#include "params/RiscvMMU.hh"
+
+namespace gem5
+{
+namespace RiscvISA {
+
+class MMU : public BaseMMU
+{
+  public:
+    PMAChecker *pma;
+
+    MMU(const RiscvMMUParams &p);
+
+    TranslationGenPtr translateFunctional(
+        Addr start, Addr size, ThreadContext *tc,
+        Mode mode, Request::Flags flags) override;
+
+    PrivilegeMode getMemPriv(ThreadContext *tc, BaseMMU::Mode mode);
+    Walker* getDataWalker();
+    PMP* getPMP();
+
+    void setOldPriv(ThreadContext *tc) override;
+    void useNewPriv(ThreadContext *tc) override;
+    void takeOverFrom(BaseMMU *old_mmu) override;
 };
 
 } // namespace RiscvISA
