@@ -125,6 +125,7 @@ class MMU : public BaseMMU
 #include "arch/riscv/isa.hh"
 #include "arch/riscv/page_size.hh"
 #include "arch/riscv/pma_checker.hh"
+#include "arch/riscv/tlb.hh"
 #include "params/RiscvMMU.hh"
 
 namespace gem5
