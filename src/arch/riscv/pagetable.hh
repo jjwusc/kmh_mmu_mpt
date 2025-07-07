@@ -35,7 +35,7 @@
 #include "base/trie.hh"
 #include "base/types.hh"
 #include "sim/serialize.hh"
-#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"
+
 
 namespace gem5
 {
@@ -43,6 +43,8 @@ namespace gem5
 namespace RiscvISA {
 	
 // JJW: 
+#if MPT_ENABLED 
+#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"
 inline int getPageShiftForLevel(int level)
 {
 	// 返回每个层级的页大小对应的 log2 值
@@ -54,9 +56,6 @@ inline int getPageShiftForLevel(int level)
         default: panic("Invalid MPT level: %d", level);
     }
 }
-
-
-
 
 //存入 TLB 的 MPT 相关信息（权限 + 粒度）
 struct MPTInfoInTLB
@@ -96,7 +95,7 @@ struct MPTInfoInTLB
 };
 
 #include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"  //JJW   //这个得放到后面，否则会出现循环include时，MPTInfoInTLB还没有被已知的情况。更好的写法是把MPTInfoInTLB单独当做一个hh，所有人include它
-
+#endif //MPT_ENABLED
 
 BitUnion64(SATP)
     Bitfield<63, 60> mode;
