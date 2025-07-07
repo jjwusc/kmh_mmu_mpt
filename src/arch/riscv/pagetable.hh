@@ -43,8 +43,10 @@ namespace gem5
 namespace RiscvISA {
 	
 // JJW: 
-#if MPT_ENABLED 
+
 #include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"
+
+#if MPT_ENABLED 
 inline int getPageShiftForLevel(int level)
 {
 	// 返回每个层级的页大小对应的 log2 值
@@ -94,7 +96,7 @@ struct MPTInfoInTLB
     }
 };
 
-#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"  //JJW   //这个得放到后面，否则会出现循环include时，MPTInfoInTLB还没有被已知的情况。更好的写法是把MPTInfoInTLB单独当做一个hh，所有人include它
+//#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"  //JJW   //这个得放到后面，否则会出现循环include时，MPTInfoInTLB还没有被已知的情况。更好的写法是把MPTInfoInTLB单独当做一个hh，所有人include它
 #endif //MPT_ENABLED
 
 BitUnion64(SATP)
@@ -266,7 +268,10 @@ struct TlbEntry : public Serializable
     bool preSign;
 
 	// New: 
+#if MPT_ENABLED
     MPTInfoInTLB mptInfo;// JJW
+#endif
+
 
     TlbEntry()
         : paddr(0),
@@ -287,8 +292,10 @@ struct TlbEntry : public Serializable
           isPre(false),
           fromForwardPreReq(false),
           fromBackPreReq(false),
-          preSign(false),
-		  mptInfo() //JJW
+          preSign(false)
+#if MPT_ENABLED
+        , mptInfo()
+#endif    //JJW
     {
     }
 
