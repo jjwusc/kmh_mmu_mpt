@@ -9,7 +9,7 @@
 #include <functional>
 #include <cassert>
 #include "cpu/base.hh"//cpu/thread_context.hh"只 forward declare 了 BaseCPU	，需要加 #include "cpu/base.hh"
-//#include "arch/riscv/tlb.hh" //RiscvTLBParams SimObject 相关的 Params 类型，绝大多数都通过 include 相应模块的主类头文件自动引入。
+#include "arch/riscv/tlb.hh" //RiscvTLBParams SimObject 相关的 Params 类型，绝大多数都通过 include 相应模块的主类头文件自动引入。
 #include "params/RiscvTLB.hh" //RiscvTLBParams
 #include "sim/sim_object.hh"
 #include "arch/riscv/utility.hh"
