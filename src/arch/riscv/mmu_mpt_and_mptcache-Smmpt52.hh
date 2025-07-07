@@ -32,7 +32,9 @@
 
 // 是否启用 MPT（默认启用，使用 -D__ARCH_RISCV_MMU_MPT_HH__ 禁用）																			 
 //#ifndef __ARCH_RISCV_MMU_MPT_HH__
+#ifndef MPT_ENABLED
 #define MPT_ENABLED 1
+#endif
 #include "sim/stat_control.hh" 
 //#else
 //#define MPT_ENABLED 0
