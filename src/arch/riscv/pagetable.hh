@@ -76,9 +76,12 @@ struct MPTInfoInTLB
     uint32_t reserved      : 22;  // 保留位，总共32位
 
     // 默认构造（无效）
+/*
     MPTInfoInTLB()
         : valid(0), perm_r(0), perm_w(0), perm_x(0),
           mptLogBytes(0), reserved(0) {}
+*/		  
+    MPTInfoInTLB() = default;// 让编译器自动生成默认构造函数（支持 noexcept 推导）
 
 	// 判断 MPT 信息是否可信 // 信任判断：mpt粒度是否 ≥ TLB 粒度
     bool mptinfoTrust(uint8_t tlbLogBytes) const {
