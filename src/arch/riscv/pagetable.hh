@@ -65,6 +65,49 @@ inline int getPageShiftForLevel(int level)
     }
 }
 
+
+
+//union类型写法
+
+BitUnion32(MPTInfoRaw)
+    Bitfield<0>        valid;
+    Bitfield<1>        perm_r;
+    Bitfield<2>        perm_w;
+    Bitfield<3>        perm_x;
+    Bitfield<9, 4>     mptLogBytes;
+    Bitfield<31, 10>   reserved;
+EndBitUnion(MPTInfoRaw)
+
+struct MPTInfoInTLB {
+    MPTInfoRaw raw;
+
+    MPTInfoInTLB() { raw = 0; }
+
+    bool mptinfoTrust(uint8_t tlbLogBytes) const {
+        return raw.valid() && (raw.mptLogBytes() >= tlbLogBytes);
+    }
+
+    static MPTInfoInTLB fromEntry(const MPTCacheEntry &entry, Addr rangeOffset) {
+        uint8_t pi = (rangeOffset >> getPageShiftForLevel(entry.level)) & 0xF;
+        uint8_t perm = entry.mpte.perms(pi);
+
+        MPTInfoInTLB info;
+        info.raw = 0;
+        info.raw.valid(entry.valid);
+        info.raw.perm_r((perm & MPT_PERM_R) != 0);
+        info.raw.perm_w((perm & MPT_PERM_W) != 0);
+        info.raw.perm_x((perm & MPT_PERM_X) != 0);
+        info.raw.mptLogBytes(entry.log2RegionSize);
+        return info;
+    }
+};
+
+
+
+
+/*uint32_t写法
+
+
 //存入 TLB 的 MPT 相关信息（权限 + 粒度）
 struct MPTInfoInTLB
 {
@@ -76,12 +119,11 @@ struct MPTInfoInTLB
     uint32_t reserved      : 22;  // 保留位，总共32位
 
     // 默认构造（无效）
-/*
-    MPTInfoInTLB()
-        : valid(0), perm_r(0), perm_w(0), perm_x(0),
-          mptLogBytes(0), reserved(0) {}
-*/		  
-    MPTInfoInTLB() = default;// 让编译器自动生成默认构造函数（支持 noexcept 推导）
+    //MPTInfoInTLB()
+    //    : valid(0), perm_r(0), perm_w(0), perm_x(0),
+    //      mptLogBytes(0), reserved(0) {}
+		  
+    MPTInfoInTLB() = default;// 让编译器自动生成默认构造函数（支持noexcept推导）
 
 	// 判断 MPT 信息是否可信 // 信任判断：mpt粒度是否 ≥ TLB 粒度
     bool mptinfoTrust(uint8_t tlbLogBytes) const {
@@ -105,8 +147,23 @@ struct MPTInfoInTLB
     }
 };
 
-//#include "arch/riscv/mmu_mpt_and_mptcache-Smmpt52.hh"  //JJW   //这个得放到后面，否则会出现循环include时，MPTInfoInTLB还没有被已知的情况。更好的写法是把MPTInfoInTLB单独当做一个hh，所有人include它
+
+*/
+
+
+
+
+
 #endif //MPT_ENABLED
+
+
+
+
+
+
+
+
+
 
 BitUnion64(SATP)
     Bitfield<63, 60> mode;
