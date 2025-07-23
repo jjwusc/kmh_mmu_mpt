@@ -74,8 +74,9 @@ BitUnion32(MPTInfoRaw)
     Bitfield<1>        perm_r;
     Bitfield<2>        perm_w;
     Bitfield<3>        perm_x;
-    Bitfield<9, 4>     mptLogBytes;
-    Bitfield<31, 10>   reserved;
+    Bitfield<4>        napot;           // N 位，napot 模式
+    Bitfield<11, 6>    mptLogBytes;     // 6位最大63, 支持 log2(64EB) =48, 覆盖所有 napot 层级
+    Bitfield<31, 12>   reserved;        // 剩余 bits 是保留位
 EndBitUnion(MPTInfoRaw)
 
 struct MPTInfoInTLB {
@@ -88,8 +89,9 @@ struct MPTInfoInTLB {
     }
 
     static MPTInfoInTLB fromEntry(const MPTCacheEntry &entry, Addr rangeOffset) {
+        // 根据 napot 与否判断是否使用 pi（子页索引）
         uint8_t pi = (rangeOffset >> getPageShiftForLevel(entry.level)) & 0xF;
-        uint8_t perm = entry.mpte.perms(pi);
+        uint8_t perm = entry.mpte.perms(entry.mpte.getN() ? 0 : pi);
 
         MPTInfoInTLB info;
         info.raw = 0;
@@ -97,10 +99,15 @@ struct MPTInfoInTLB {
         info.raw.perm_r((perm & MPT_PERM_R) != 0);
         info.raw.perm_w((perm & MPT_PERM_W) != 0);
         info.raw.perm_x((perm & MPT_PERM_X) != 0);
+        info.raw.napot(entry.mpte.getN());
+
+        // 不再重复推导，直接使用已有值(在 mpt.cc 中或 tlb.cc 中已近分别考虑过 N 位开启后的等效 size)
         info.raw.mptLogBytes(entry.log2RegionSize);
+
         return info;
     }
 };
+
 
 
 
@@ -111,38 +118,43 @@ struct MPTInfoInTLB {
 //存入 TLB 的 MPT 相关信息（权限 + 粒度）
 struct MPTInfoInTLB
 {
-    uint32_t valid         : 1;   // 是否有效
-    uint32_t perm_r        : 1;
-    uint32_t perm_w        : 1;
-    uint32_t perm_x        : 1;
-    uint32_t mptLogBytes   : 6;   // MPT 粒度，log2(region size)//6位最多为63. 2^63 ≈ 8EB  2^31  = 2GB. 6位足够
-    uint32_t reserved      : 22;  // 保留位，总共32位
+    uint32_t valid         : 1;   // bit 0
+    uint32_t perm_r        : 1;   // bit 1
+    uint32_t perm_w        : 1;   // bit 2
+    uint32_t perm_x        : 1;   // bit 3
+    uint32_t napot         : 1;   // bit 4, 表示是否 napot 模式
+    uint32_t mptLogBytes   : 6;   // bit 5~10，权限粒度 log2 区域大小    MPT 粒度，log2(region size)//6位最多为63. 2^63 ≈ 8EB  2^31  = 2GB. 6位足够
+    uint32_t reserved      : 21;  // bit 11~31，保留
 
-    // 默认构造（无效）
+
+	
+	// 默认构造（无效）
     //MPTInfoInTLB()
     //    : valid(0), perm_r(0), perm_w(0), perm_x(0),
     //      mptLogBytes(0), reserved(0) {}
-		  
+	
+	
     MPTInfoInTLB() = default;// 让编译器自动生成默认构造函数（支持noexcept推导）
 
-	// 判断 MPT 信息是否可信 // 信任判断：mpt粒度是否 ≥ TLB 粒度
+    // 判断当前 TLB 项是否可用// 信任判断：mpt粒度是否 ≥ TLB 粒度
     bool mptinfoTrust(uint8_t tlbLogBytes) const {
-        return this->valid && (this->mptLogBytes >= tlbLogBytes);// replace 'tlbLogBytes' with 'min()'
+        return this->valid && (this->mptLogBytes >= tlbLogBytes);
     }
 
-
-    // 静态函数，直接从一个 entry 构造出 info
+	 // 静态函数，直接从一个 entry 构造出 info
 	//调用方法：MPTInfoInTLB info = MPTInfoInTLB::fromEntry(entry, offset);
     static MPTInfoInTLB fromEntry(const MPTCacheEntry &entry, Addr rangeOffset) {
         uint8_t pi = (rangeOffset >> getPageShiftForLevel(entry.level)) & 0xF;
-        uint8_t perm = entry.mpte.perms(pi);
+        uint8_t perm = entry.mpte.perms(entry.mpte.getN() ? 0 : pi);
 
         MPTInfoInTLB info;
         info.valid = entry.valid;
         info.perm_r = (perm & MPT_PERM_R) != 0;
         info.perm_w = (perm & MPT_PERM_W) != 0;
         info.perm_x = (perm & MPT_PERM_X) != 0;
-        info.mptLogBytes = entry.log2RegionSize;
+        info.napot  = entry.mpte.getN();                    // N 位直接写入
+        info.mptLogBytes = entry.log2RegionSize;            // 等效区域 log2 值
+        info.reserved = 0;
         return info;
     }
 };

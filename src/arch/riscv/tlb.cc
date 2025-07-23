@@ -2945,10 +2945,25 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
 			
 			// Case 3: 成功，计算 offset 和权限；回填 TLB 的 mptInfo；提取权限
 			Addr offset = paForMPTCheck - cacheEntry.tag;
-			entry->mptInfo = MPTInfoInTLB::fromEntry(cacheEntry, offset);
+			uint64_t regionSizeAfterN = getRegionSizeForLevel(level);
+			if (cacheEntry.mpte.getN()) {
+				regionSizeAfterN *= 512;  // napot 模式，粒度放大
+			}
+			uint8_t log2RegionSize = log2floor(regionSizeAfterN);
+			
+			// 构造虚拟 cache entry 供 fromEntry 使用
+			MPTCacheEntry fakeEntry = {
+				.tag = regionAlign(paForMPTCheck, level),
+				.mpte = mpte,
+				.valid = true,
+				.level = level,
+				.log2RegionSize = log2RegionSize
+			};
+			entry->mptInfo = MPTInfoInTLB::fromEntry(fakeEntry, offset);
+
 
 			uint8_t pi = (offset >> getPageShiftForLevel(level)) & 0xF;
-			uint8_t perm = cacheEntry.mpte.perms(pi);
+			uint8_t perm = cacheEntry.mpte.perms(pi); //// 这个就够了，内部已自动处理 napot
 			bool hasPerm = false;
 
 			switch (mode) {
@@ -3004,6 +3019,8 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
         return;
 	}
 	
+	
+	
     // Case 2。在这里手动 walk 并构造 MPTInfoInTLB，
     //MPTE52 mpte = globalMPT.walk(paForMPTCheck);
 	mpt.walkDelayed(paForMPTCheck, tc, pma, pmp,[=](MPTE52 mpte) {
@@ -3013,21 +3030,32 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
 			translation->finish(createMPTPagefault(vaddr, paForMPTCheck, mode), req, tc, mode);
 			return;
 			}
-
+		
+		// regionBase 不需要乘系数，仅对齐
 		Addr regionBase = paForMPTCheck  & ~(getRegionSizeForLevel(level) - 1);
 		Addr offset = paForMPTCheck  - regionBase;
 
+		//perms(pi) 已封装了N的判断逻辑
 		uint8_t pi = (offset >> getPageShiftForLevel(level)) & 0xF;
 		uint8_t perm = mpte.perms(pi);
 
-		//回填 mptInfo//这段逻辑是在 127 cycle 之后被 schedule 执行
-		entry->mptInfo.valid = true;
-		entry->mptInfo.perm_r = (perm & MPT_PERM_R) != 0;
-		entry->mptInfo.perm_w = (perm & MPT_PERM_W) != 0;
-		entry->mptInfo.perm_x = (perm & MPT_PERM_X) != 0;
-		entry->mptInfo.mptLogBytes = log2floor(getRegionSizeForLevel(level));
-		entry->mptInfo.reserved = 0;
+		//napot 模式下权限粒度扩大，需乘以 512
+		uint64_t regionSizeAfterrN = getRegionSizeForLevel(level);
+		if (mpte.getN()) {
+			regionSizeAfterrN *= 512;
+		}
+		uint8_t log2RegionSize = log2floor(regionSizeAfterrN);
+		
+		//回填 mptInfo//这段逻辑是在 127 cycle 之后被 schedule 执行	
+		entry->mptInfo.raw = 0;
+		entry->mptInfo.raw.valid(1);
+		entry->mptInfo.raw.perm_r((perm & MPT_PERM_R) != 0);
+		entry->mptInfo.raw.perm_w((perm & MPT_PERM_W) != 0);
+		entry->mptInfo.raw.perm_x((perm & MPT_PERM_X) != 0);
+		entry->mptInfo.raw.napot(mpte.getN());  // 显式标记 napot
+		entry->mptInfo.raw.mptLogBytes(log2RegionSize);
 
+		// 权限判断
 		bool hasPerm = false;
 		switch (mode) {
 			case BaseMMU::Read:    hasPerm = perm & MPT_PERM_R; break;
@@ -3046,6 +3074,12 @@ checkMPTPermissionFunctionInTLBcc(TlbEntry* entry, Addr vaddr, Addr paForMPTChec
 		Fault fault = hasPerm ? NoFault : createMPTPagefault(vaddr, paForMPTCheck, mode);
 		translation->finish(fault, req, tc, mode);
 	});
+	
+	
+
+	
+	
+	
 
     // 提前 return（等待 finish 回调）
     return;

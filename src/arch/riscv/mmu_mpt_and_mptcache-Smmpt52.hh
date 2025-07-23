@@ -49,6 +49,10 @@
 //#endif
 
 
+#ifndef MPT_SIMULATE_N_BIT
+#define MPT_SIMULATE_N_BIT 0
+#endif
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace gem5 {
@@ -213,8 +217,8 @@ struct MPT {
 //void initMPTCacheFromParams(const RiscvTLBParams *params);//JJW2
 
 struct MPTCacheEntry {
-    Addr tag;                  // region base（对齐后的地址）   目前这个tag用不上，用于查找的key是下面unordered map中的Addr，此处tag的用处为增加调试信息+以后扩展为set-ass时可用
-    MPTE52 mpte;               // 缓存的 MPTE
+    Addr tag;                  // region base（对齐后的地址）   目前这个 tag 用不上，用于查找的 key 是下面 unordered map 中的 Addr，此处 tag 的用处为增加调试信息 + 以后扩展为 set-ass 时可用
+    MPTE52 mpte;               // 缓存的 MPTE  // 这个结构体包含 raw 64-bit 值，N 位在内部就有 
     bool valid = false;
 
     //让 cache entry 自带粒度信息

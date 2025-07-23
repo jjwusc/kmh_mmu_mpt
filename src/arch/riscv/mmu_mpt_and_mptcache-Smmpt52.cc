@@ -61,6 +61,11 @@ Addr MPTE52::nextLevelPAddr() const {
 
 // 获取第 pi 个页的权限（pi ∈ [0, 15]）
 uint8_t MPTE52::perms(uint8_t pi) const {
+    // 若启用了 napot，返回统一权限（使用 perms[0]）
+    if (getN())
+        return (raw >> 2) & MPT_PERM_MASK;
+
+    // 否则返回第 pi 项权限
     if (pi >= MPT_NUM_PERMS) return 0;
     return (raw >> (2 + pi * MPT_PERM_BITS_PER_ENTRY)) & MPT_PERM_MASK;//2是因为最后两位分别是valid和leaf
 }
@@ -92,15 +97,25 @@ MPT::MPT() : nextPPN(0x10000) {
     rootPPN = buildSimulatedMPTTree();
 }
 
+
+
 MPTE52 MPT::simulateLeafAllowAll() const {
     uint64_t raw = 0;
     raw |= 0x1; // V
     raw |= 0x2; // L
-    for (int i = 0; i < MPT_NUM_PERMS; ++i) {    // 设置16个权限段，每段3bit，为 0b111（R/W/X）
-        raw |= ((uint64_t)(MPT_PERM_R | MPT_PERM_W | MPT_PERM_X) << (2 + i * MPT_PERM_BITS_PER_ENTRY));
+
+#if MPT_SIMULATE_N_BIT
+    raw |= (1ULL << 63); // N = 1 表示 napot
+#endif
+
+    for (int i = 0; i < MPT_NUM_PERMS; ++i) { // 设置16个权限段，每段3bit，为 0b111（R/W/X）
+        raw |= ((uint64_t)(MPT_PERM_R | MPT_PERM_W | MPT_PERM_X)
+               << (2 + i * MPT_PERM_BITS_PER_ENTRY));
     }
+
     return MPTE52(raw);
 }
+
 
 MPTE52 MPT::simulateNonLeaf(Addr nextLevelPPN) const {
     uint64_t raw = 0;
@@ -429,9 +444,16 @@ void MPTCache52::fetchDelayed(
                     table_mut.erase(randomIt);
                 }
 */
-                MPTCacheEntry entry = {
-                    aligned, mpte, true, level, log2floor(getRegionSizeForLevel(level))
-                };
+
+				uint64_t regionSize = getRegionSizeForLevel(level);
+				if (mpte.getN()) {
+					regionSize *= 512;  // napot 模式，等效区域放大
+				}
+
+				MPTCacheEntry entry = {
+					aligned, mpte, true, level, log2floor(regionSize)
+				};
+
                 table_mut[aligned] = entry;
 
                 // 统计未命中
