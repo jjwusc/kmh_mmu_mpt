@@ -278,16 +278,39 @@ MPTCache52::MPTCache52(size_t capL0, size_t capL1, size_t capL2, size_t capL3, s
       capacityL1(capL1),
       capacityL2(capL2),
       capacityL3(capL3),
-      capacitySP(capSP)
-{}
+      capacitySP(capSP),
+      plruL0(capL0),
+      plruL1(capL1),
+      plruL2(capL2),
+      plruL3(capL3),
+      plruSP(capSP)
+{
+    tagListL0.reserve(capL0);
+    tagListL1.reserve(capL1);
+    tagListL2.reserve(capL2);
+    tagListL3.reserve(capL3);
+    tagListSP.reserve(capSP);
+}
 
 MPTCache52::MPTCache52()
     : capacityL0(configuredSizeL0),
       capacityL1(configuredSizeL1),
       capacityL2(configuredSizeL2),
       capacityL3(configuredSizeL3),
-      capacitySP(configuredSizeSP)
-{}
+      capacitySP(configuredSizeSP),
+      plruL0(configuredSizeL0),
+      plruL1(configuredSizeL1),
+      plruL2(configuredSizeL2),
+      plruL3(configuredSizeL3),
+      plruSP(configuredSizeSP)
+{
+    tagListL0.reserve(capacityL0);
+    tagListL1.reserve(capacityL1);
+    tagListL2.reserve(capacityL2);
+    tagListL3.reserve(capacityL3);
+    tagListSP.reserve(capacitySP);
+}
+
 
 void MPTCache52::configureSize(int sL0, int sL1, int sL2, int sL3, int sSP) {
     configuredSizeL0 = sL0;
@@ -337,7 +360,24 @@ size_t MPTCache52::getCapacityByLevel(int level) const {
     else return capacitySP;
 }
 
-	
+// -------- PLRU 替换支持 --------
+std::vector<Addr>& MPTCache52::getTagListByLevel(int level) {
+    if (level == 0) return tagListL0;
+    else if (level == 1) return tagListL1;
+    else if (level == 2) return tagListL2;
+    else if (level == 3) return tagListL3;
+    else return tagListSP;
+}
+
+PLRUTreeN& MPTCache52::getPLRUByLevel(int level) {
+    if (level == 0) return plruL0;
+    else if (level == 1) return plruL1;
+    else if (level == 2) return plruL2;
+    else if (level == 3) return plruL3;
+    else return plruSP;
+}
+// -------------------------------
+
 	
 	
 //int MPTCache52::configuredSize = MPT_CACHE_SIZE;
@@ -406,6 +446,18 @@ void MPTCache52::fetchDelayed(
         Tick delay = 10 * SimClock::Int::ns();
         MPTCacheEntry entry = it->second;
 
+//PLRU 更新
+		auto& tagList = this->getTagListByLevel(level);
+		auto& plru = this->getPLRUByLevel(level);
+
+		auto itTag = std::find(tagList.begin(), tagList.end(), aligned);
+		if (itTag != tagList.end()) {
+			size_t idx = std::distance(tagList.begin(), itTag);
+			plru.access(idx);  // 表示此 entry 被访问，刷新路径
+		}
+// -----------
+
+
         // 统计命中
         //++globalMPT->mptCacheL1Misses;
         if (level == 0) ++globalMPT->mptCacheL0Hits;
@@ -429,14 +481,35 @@ void MPTCache52::fetchDelayed(
                 }
 
                 // 插入缓存
-                auto& table_mut = this->getTableByLevel(level);
-                size_t& cap = this->getCapacityByLevel(level);
+                auto& table_mut = this->getTableByLevel(level);//获取当前层级（L0/L1/L2/L3/SP）对应的缓存表（map）
+                size_t& cap = this->getCapacityByLevel(level);//获取当前层级对应 cache 的最大容量限制
 
+
+//PLRU 替换
+				auto& tagList = this->getTagListByLevel(level);//获取当前层级用于记录 entry 顺序的 tag 列表（vector）
+				auto& plru = this->getPLRUByLevel(level);//获取当前层级的 PLRU 树，用于决定 victim 替换哪一项、刷新访问路径
+
+				if (table_mut.size() >= cap) {
+					size_t victimIdx = plru.getVictim();
+					Addr victimAddr = tagList[victimIdx];
+					table_mut.erase(victimAddr);
+					tagList[victimIdx] = aligned;
+					plru.access(victimIdx);
+				} else {
+					tagList.push_back(aligned);
+					plru.access(tagList.size() - 1);
+				}
+// -----------
+
+
+/*随机替换
                 if (table_mut.size() >= cap) {
                     auto randomIt = std::next(table_mut.begin(), rand() % table_mut.size());
                     table_mut.erase(randomIt);
                 }
-/*
+*/
+				
+/* 另一种实现方式
                 auto& table_mut = const_cast<MPTCache52*>(this)->getTableByLevel(level);
                 size_t& cap = const_cast<MPTCache52*>(this)->getCapacityByLevel(level);
                 if (table_mut.size() >= cap) {

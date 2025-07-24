@@ -2,6 +2,7 @@
 #define __ARCH_RISCV_MMU_MPT_AND_CACHE_SMMPT52_HH__
 
 #include <unordered_map>
+#include "arch/riscv/plru.hh" 
 #include "arch/riscv/isa.hh" //PrivilegeMode)，getMemPriv(tc, BaseMMU::Read);
 #include <vector>
 #include <optional>
@@ -13,7 +14,7 @@
 #include "params/RiscvTLB.hh" //RiscvTLBParams
 #include "sim/sim_object.hh"
 #include "arch/riscv/utility.hh"
-#include "base/types.hh"      // for Addr, uint64_t 等类型， 否则用不了!!    //typedef uint64_t Tick;
+#include "base/types.hh"      // for Addr, uint64_t 等类型，    //typedef uint64_t Tick;
 #include "arch/riscv/mmu.hh"  // for BaseMMU::Mode
 #include "arch/riscv/pma_checker.hh"  // PMAChecker
 #include "arch/riscv/pmp.hh"       // PMP
@@ -247,6 +248,23 @@ class MPTCache52 {
 	std::unordered_map<Addr, MPTCacheEntry> tableL3;
 	std::unordered_map<Addr, MPTCacheEntry> tableSP;
 
+	// -------- PLRU 替换支持 --------
+	// 每级 tag 顺序 & 替换路径
+	// 每级 cache 的 tag 顺序表 + 对应的 PLRU 树
+	std::vector<Addr> tagListL0;
+	std::vector<Addr> tagListL1;
+	std::vector<Addr> tagListL2;
+	std::vector<Addr> tagListL3;
+	std::vector<Addr> tagListSP;
+
+	PLRUTreeN plruL0 = PLRUTreeN(1); // 默认构造，稍后 resize
+	PLRUTreeN plruL1 = PLRUTreeN(1);
+	PLRUTreeN plruL2 = PLRUTreeN(1);
+	PLRUTreeN plruL3 = PLRUTreeN(1);
+	PLRUTreeN plruSP = PLRUTreeN(1);
+	// -------------------------------
+	
+	
 
     // 根据当前层级获取区域对齐地址（以 MPTE 粒度为单位）
     Addr regionAlign(Addr pa, int level) const;
@@ -278,6 +296,12 @@ class MPTCache52 {
 	static void configureSize(int sL0, int sL1, int sL2, int sL3, int sSP);
 
 	void initMPTCacheFromParams(const RiscvTLBParams *params);
+	
+	// -------- PLRU 替换支持 --------
+	std::vector<Addr>& getTagListByLevel(int level);
+	PLRUTreeN& getPLRUByLevel(int level);
+	// -------------------------------
+
 
 	// 非 const 版本：允许修改
 	std::unordered_map<Addr, MPTCacheEntry>& getTableByLevel(int level);
@@ -290,6 +314,30 @@ class MPTCache52 {
 
 	// 只读版本（如果需要在 const 函数中读取容量）
 	size_t getCapacityByLevel(int level) const;
+
+	void fetchDelayed(
+        Addr pa,
+        int level,
+        const MPT &mpt,
+        ThreadContext *tc,
+        PMAChecker *pma, PMP *pmp,
+        std::function<void(bool /*hit*/, MPTCacheEntry)> callback) const;
+        //callback是一个函数指针的封装，类型是：std::function<void(bool, MPTCacheEntry)>
+
+
+};
+
+#endif // MPT_CACHE_ENABLED
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+} // namespace RiscvISA
+} // namespace gem5
+
+#endif // __ARCH_RISCV_MMU_MPT_AND_CACHE_SMMPT52_HH__
+
+
+
 
 
 /* 
@@ -442,27 +490,3 @@ class MPTCache52 {
 */	
  
  
-
-
-
-
-	void fetchDelayed(
-        Addr pa,
-        int level,
-        const MPT &mpt,
-        ThreadContext *tc,
-        PMAChecker *pma, PMP *pmp,
-        std::function<void(bool /*hit*/, MPTCacheEntry)> callback) const;
-        //callback是一个函数指针的封装，类型是：std::function<void(bool, MPTCacheEntry)>
-
-
-};
-
-#endif // MPT_CACHE_ENABLED
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-} // namespace RiscvISA
-} // namespace gem5
-
-#endif // __ARCH_RISCV_MMU_MPT_AND_CACHE_SMMPT52_HH__
