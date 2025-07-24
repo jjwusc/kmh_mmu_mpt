@@ -1,4 +1,4 @@
-// plru_tree.hh
+// plru.hh
 // 通用 N-way Pseudo-LRU 替换树结构头文件
 #pragma once
 

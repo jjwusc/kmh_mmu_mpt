@@ -1,5 +1,5 @@
-// plru_tree.cc
-#include "plru_tree.hh"
+// plru.cc
+#include "plru.hh"
 #include <algorithm>
 #include <cassert>
 
